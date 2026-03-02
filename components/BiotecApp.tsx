@@ -392,18 +392,24 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     }
     
     try {
+      let res;
       if (view === 'edit' && editingId) {
-        await fetch(`/api/chamados/${editingId}`, {
+        res = await fetch(`/api/chamados/${editingId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
       } else {
-        await fetch('/api/chamados', {
+        res = await fetch('/api/chamados', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
+      }
+      
+      const result = await res.json();
+      if (!res.ok) {
+        throw new Error(result.error || 'Erro ao salvar o chamado. Verifique se as colunas de imagem foram criadas no banco de dados.');
       }
       
       setSubmitted(true);
@@ -413,8 +419,9 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
         setView('list');
         resetForm();
       }, 2000);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao salvar:', error);
+      alert(error.message || 'Erro inesperado ao salvar.');
     } finally {
       setIsSubmitting(false);
     }

@@ -83,7 +83,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
   const [isCreatingUser, setIsCreatingUser] = React.useState(false);
 
   // History Filters
-  const [historyMonth, setHistoryMonth] = React.useState(new Date().getMonth());
+  const [historyMonth, setHistoryMonth] = React.useState<number | 'all'>(new Date().getMonth());
   const [historyYear, setHistoryYear] = React.useState(new Date().getFullYear());
   const [historyCondo, setHistoryCondo] = React.useState('all');
   const [statusFilter, setStatusFilter] = React.useState<string>('Todos');
@@ -110,10 +110,17 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
       const res = await fetch('/api/chamados');
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erro ao buscar chamados');
-      setChamados(Array.isArray(data) ? data : []);
+      
+      const mappedData = (Array.isArray(data) ? data : []).map((c: any) => ({
+        ...c,
+        createdAt: c.created_at || c.createdAt || new Date().toISOString(),
+        createdBy: c.created_by || c.createdBy || 'Sistema',
+        problemType: c.problem_type || c.problemType || 'outro'
+      }));
+      
+      setChamados(mappedData);
     } catch (error: any) {
       console.error('Erro ao buscar chamados:', error);
-      // Opcional: mostrar um toast ou alerta
     } finally {
       setLoading(false);
     }
@@ -217,14 +224,15 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
   }, [chamados, isMaster, user, statusFilter]);
 
   const historyChamados = React.useMemo(() => {
-    return filteredChamados.filter(c => {
+    const base = isMaster ? chamados : chamados.filter(c => c.createdBy === user);
+    return base.filter(c => {
       const date = new Date(c.createdAt);
-      const matchesMonth = date.getMonth() === historyMonth;
+      const matchesMonth = historyMonth === 'all' || date.getMonth() === historyMonth;
       const matchesYear = date.getFullYear() === historyYear;
       const matchesCondo = historyCondo === 'all' || c.condominio === historyCondo;
       return matchesMonth && matchesYear && matchesCondo;
     });
-  }, [filteredChamados, historyMonth, historyYear, historyCondo]);
+  }, [chamados, isMaster, user, historyMonth, historyYear, historyCondo]);
 
   const stats = React.useMemo(() => {
     const total = filteredChamados.length;
@@ -346,71 +354,91 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
   };
 
   const exportCSV = () => {
-    const headers = ['Data', 'Condominio', 'Bloco', 'Apto', 'Tipo', 'Status', 'Descricao', 'Resolucao'];
-    const rows = historyChamados.map(c => [
-      new Date(c.createdAt).toLocaleDateString('pt-BR'),
-      c.condominio,
-      c.bloco,
-      c.apto,
-      c.problemType,
-      c.status,
-      c.descricao.replace(/\n/g, ' '),
-      (c.resolucao || '').replace(/\n/g, ' ')
-    ]);
+    try {
+      if (historyChamados.length === 0) {
+        alert('Não há chamados no período selecionado para exportar.');
+        return;
+      }
+      const headers = ['Data', 'Condominio', 'Bloco', 'Apto', 'Tipo', 'Status', 'Descricao', 'Resolucao'];
+      const rows = historyChamados.map(c => [
+        new Date(c.createdAt).toLocaleDateString('pt-BR'),
+        c.condominio,
+        c.bloco,
+        c.apto,
+        c.problemType,
+        c.status,
+        c.descricao.replace(/\n/g, ' ').replace(/,/g, ';'),
+        (c.resolucao || '').replace(/\n/g, ' ').replace(/,/g, ';')
+      ]);
 
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(r => r.join(','))
-    ].join('\n');
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(r => r.join(','))
+      ].join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `relatorio_biotec_${historyMonth + 1}_${historyYear}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      const monthLabel = historyMonth === 'all' ? 'todos' : historyMonth + 1;
+      link.setAttribute('download', `relatorio_biotec_${monthLabel}_${historyYear}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error: any) {
+      console.error('Erro ao exportar CSV:', error);
+      alert('Erro ao gerar CSV: ' + error.message);
+    }
   };
 
   const exportPDF = () => {
-    const doc = new jsPDF();
-    
-    // Header
-    doc.setFontSize(20);
-    doc.setTextColor(0, 168, 89); // Biotec Green
-    doc.text('Biotec - Relatório de Chamados', 14, 22);
-    
-    doc.setFontSize(10);
-    doc.setTextColor(100);
-    const monthName = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'][historyMonth];
-    doc.text(`Período: ${monthName} / ${historyYear}`, 14, 30);
-    doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 14, 35);
-    if (historyCondo !== 'all') {
-      doc.text(`Condomínio: ${historyCondo}`, 14, 40);
+    try {
+      if (historyChamados.length === 0) {
+        alert('Não há chamados no período selecionado para exportar.');
+        return;
+      }
+      const doc = new jsPDF();
+      
+      // Header
+      doc.setFontSize(20);
+      doc.setTextColor(0, 168, 89); // Biotec Green
+      doc.text('Biotec - Relatório de Chamados', 14, 22);
+      
+      doc.setFontSize(10);
+      doc.setTextColor(100);
+      const monthName = historyMonth === 'all' ? 'Todos os Meses' : ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'][historyMonth];
+      doc.text(`Período: ${monthName} / ${historyYear}`, 14, 30);
+      doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 14, 35);
+      if (historyCondo !== 'all') {
+        doc.text(`Condomínio: ${historyCondo}`, 14, 40);
+      }
+
+      const tableColumn = ["Data", "Condomínio", "Local", "Tipo", "Status", "Resolução"];
+      const tableRows = historyChamados.map(c => [
+        new Date(c.createdAt).toLocaleDateString('pt-BR'),
+        c.condominio,
+        `Bl ${c.bloco} - Apt ${c.apto}`,
+        c.problemType === 'interfone' ? 'Interfone' : c.problemType === 'tv' ? 'TV' : 'Outro',
+        c.status,
+        c.resolucao || '-'
+      ]);
+
+      autoTable(doc, {
+        startY: 45,
+        head: [tableColumn],
+        body: tableRows,
+        headStyles: { fillColor: [0, 168, 89] },
+        alternateRowStyles: { fillColor: [245, 245, 245] },
+        margin: { top: 45 },
+      });
+
+      const monthLabel = historyMonth === 'all' ? 'todos' : historyMonth + 1;
+      doc.save(`relatorio_biotec_${monthLabel}_${historyYear}.pdf`);
+    } catch (error: any) {
+      console.error('Erro ao exportar PDF:', error);
+      alert('Erro ao gerar PDF: ' + error.message);
     }
-
-    const tableColumn = ["Data", "Condomínio", "Local", "Tipo", "Status", "Resolução"];
-    const tableRows = historyChamados.map(c => [
-      new Date(c.createdAt).toLocaleDateString('pt-BR'),
-      c.condominio,
-      `Bl ${c.bloco} - Apt ${c.apto}`,
-      c.problemType === 'interfone' ? 'Interfone' : c.problemType === 'tv' ? 'TV' : 'Outro',
-      c.status,
-      c.resolucao || '-'
-    ]);
-
-    autoTable(doc, {
-      startY: 45,
-      head: [tableColumn],
-      body: tableRows,
-      headStyles: { fillColor: [0, 168, 89] },
-      alternateRowStyles: { fillColor: [245, 245, 245] },
-      margin: { top: 45 },
-    });
-
-    doc.save(`relatorio_biotec_${historyMonth + 1}_${historyYear}.pdf`);
   };
 
   return (
@@ -542,13 +570,28 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                 exit={{ opacity: 0, x: 20 }}
                 className="flex flex-col gap-8"
               >
-                {/* Master Stats */}
-                {isMaster && (
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <StatCard label="Total de Chamados" value={stats.total} icon={<Ticket className="text-blue-500" />} />
-                    <StatCard label="Pendentes" value={stats.pendentes} icon={<Clock className="text-amber-500" />} />
-                    <StatCard label="Em Andamento" value={stats.emAndamento} icon={<AlertCircle className="text-indigo-500" />} />
-                    <StatCard label="Concluídos" value={stats.concluidos} icon={<CheckCircle2 className="text-green-500" />} />
+                {/* Stats */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <StatCard label="Total de Chamados" value={stats.total} icon={<Ticket className="text-blue-500" />} />
+                  <StatCard label="Pendentes" value={stats.pendentes} icon={<Clock className="text-amber-500" />} />
+                  <StatCard label="Em Andamento" value={stats.emAndamento} icon={<AlertCircle className="text-indigo-500" />} />
+                  <StatCard label="Concluídos" value={stats.concluidos} icon={<CheckCircle2 className="text-green-500" />} />
+                </div>
+
+                {isMaster && Object.keys(stats.byCondo).length > 0 && (
+                  <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <h3 className="mb-4 text-lg font-bold flex items-center gap-2">
+                      <Building2 size={20} className="text-[#00a859]" />
+                      Chamados por Condomínio
+                    </h3>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                      {Object.entries(stats.byCondo).map(([condo, count]) => (
+                        <div key={condo} className="flex items-center justify-between rounded-lg bg-slate-50 p-3 border border-slate-100">
+                          <span className="text-sm font-medium text-slate-700 truncate mr-2">{condo}</span>
+                          <span className="rounded-full bg-[#00a859] px-2 py-0.5 text-[10px] font-bold text-white">{count}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -651,9 +694,10 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                       <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                       <select 
                         value={historyMonth}
-                        onChange={(e) => setHistoryMonth(parseInt(e.target.value))}
+                        onChange={(e) => setHistoryMonth(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
                         className="w-full rounded-lg border-slate-200 bg-slate-50 py-2 pl-10 text-sm focus:border-[#00a859] focus:ring-[#00a859]"
                       >
+                        <option value="all">Todos os Meses</option>
                         {['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'].map((m, i) => (
                           <option key={m} value={i}>{m}</option>
                         ))}
@@ -1173,11 +1217,17 @@ function ChamadoCard({ chamado, onEdit, onDelete, showCondo, isMaster }: { chama
   return (
     <div className="group flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:shadow-md">
       <div className="mb-4 flex items-start justify-between">
-        <div className={`flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${statusColors[chamado.status]}`}>
-          {chamado.status === 'Pendente' && <Clock size={10} />}
-          {chamado.status === 'Em Andamento' && <AlertCircle size={10} />}
-          {chamado.status === 'Concluído' && <CheckCircle2 size={10} />}
-          {chamado.status}
+        <div className="flex flex-col gap-1">
+          <div className={`flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider w-fit ${statusColors[chamado.status]}`}>
+            {chamado.status === 'Pendente' && <Clock size={10} />}
+            {chamado.status === 'Em Andamento' && <AlertCircle size={10} />}
+            {chamado.status === 'Concluído' && <CheckCircle2 size={10} />}
+            {chamado.status}
+          </div>
+          <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400">
+            <Calendar size={10} />
+            {new Date(chamado.createdAt).toLocaleDateString('pt-BR')}
+          </div>
         </div>
         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button onClick={onEdit} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-[#00a859]">
@@ -1203,8 +1253,9 @@ function ChamadoCard({ chamado, onEdit, onDelete, showCondo, isMaster }: { chama
         {chamado.descricao}
       </p>
 
-      <div className="mt-auto pt-4 border-t border-slate-50 flex items-center justify-end text-[10px] text-slate-400">
-        <span>{new Date(chamado.createdAt).toLocaleDateString('pt-BR')}</span>
+      <div className="mt-auto pt-4 border-t border-slate-50 flex items-center justify-between text-[10px] text-slate-400">
+        <span className="font-medium">ID: {chamado.id.substring(0, 8)}</span>
+        <span>{new Date(chamado.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
       </div>
     </div>
   );

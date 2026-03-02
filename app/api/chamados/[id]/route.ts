@@ -17,6 +17,8 @@ export async function PUT(
     if (data.bloco) updateData.bloco = data.bloco;
     if (data.apto) updateData.apto = data.apto;
     if (data.problemType) updateData.problem_type = data.problemType;
+    if (data.imageUrl !== undefined) updateData.image_url = data.imageUrl;
+    if (data.resolutionImageUrl !== undefined) updateData.resolution_image_url = data.resolutionImageUrl;
 
     const { data: updated, error } = await supabase
       .from('chamados')

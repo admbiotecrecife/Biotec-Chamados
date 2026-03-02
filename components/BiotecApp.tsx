@@ -27,6 +27,10 @@ import {
   Users,
   UserPlus,
   Key,
+  Camera,
+  Image as ImageIcon,
+  Paperclip,
+  Maximize2,
   Menu,
   Eye,
   Lock
@@ -58,6 +62,8 @@ interface Chamado {
   status: 'Pendente' | 'Em Andamento' | 'Concluído';
   createdAt: string;
   createdBy: string;
+  imageUrl?: string;
+  resolutionImageUrl?: string;
 }
 
 interface BiotecAppProps {
@@ -98,6 +104,10 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
   const [resolucao, setResolucao] = React.useState('');
   const [status, setStatus] = React.useState<'Pendente' | 'Em Andamento' | 'Concluído'>('Pendente');
   const [isAreaComum, setIsAreaComum] = React.useState(false);
+  const [imageUrl, setImageUrl] = React.useState('');
+  const [resolutionImageUrl, setResolutionImageUrl] = React.useState('');
+  const [isUploading, setIsUploading] = React.useState(false);
+  const [selectedImage, setSelectedImage] = React.useState<string | null>(null); // For modal view
   
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [submitted, setSubmitted] = React.useState(false);
@@ -115,7 +125,9 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
         ...c,
         createdAt: c.created_at || c.createdAt || new Date().toISOString(),
         createdBy: c.created_by || c.createdBy || 'Sistema',
-        problemType: c.problem_type || c.problemType || 'outro'
+        problemType: c.problem_type || c.problem_type || c.problemType || 'outro',
+        imageUrl: c.image_url || c.imageUrl || '',
+        resolutionImageUrl: c.resolution_image_url || c.resolutionImageUrl || ''
       }));
       
       setChamados(mappedData);
@@ -264,6 +276,8 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     setStatus('Pendente');
     setEditingId(null);
     setSubmitted(false);
+    setImageUrl('');
+    setResolutionImageUrl('');
   };
 
   const handleCreate = () => {
@@ -280,6 +294,8 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     setDescricao(chamado.descricao);
     setResolucao(chamado.resolucao || '');
     setStatus(chamado.status);
+    setImageUrl(chamado.imageUrl || '');
+    setResolutionImageUrl(chamado.resolutionImageUrl || '');
     setView('edit');
   };
 
@@ -292,6 +308,43 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     } catch (error) {
       console.error('Erro ao excluir:', error);
     }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'problem' | 'resolution') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Por favor, selecione uma imagem válida.');
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert('A imagem é muito grande. Por favor, use uma imagem de até 2MB.');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        if (type === 'problem') setImageUrl(base64String);
+        else setResolutionImageUrl(base64String);
+        setIsUploading(true); // Keep it true for a moment to show "loading" effect if needed
+        setTimeout(() => setIsUploading(false), 500);
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Erro ao processar imagem:', error);
+      setIsUploading(false);
+      alert('Erro ao carregar imagem.');
+    }
+  };
+
+  const removeImage = (type: 'problem' | 'resolution') => {
+    if (type === 'problem') setImageUrl('');
+    else setResolutionImageUrl('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -321,7 +374,17 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     }
 
     setIsSubmitting(true);
-    const payload: any = { condominio, bloco, apto, problemType: finalProblemType, descricao, resolucao, status };
+    const payload: any = { 
+      condominio, 
+      bloco, 
+      apto, 
+      problemType: finalProblemType, 
+      descricao, 
+      resolucao, 
+      status,
+      imageUrl,
+      resolutionImageUrl
+    };
     
     // Só envia createdBy na criação para não sobrescrever o dono original no edit
     if (view === 'create') {
@@ -363,7 +426,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
         alert('Não há chamados no período selecionado para exportar.');
         return;
       }
-      const headers = ['Data', 'Condominio', 'Bloco', 'Apto', 'Tipo', 'Status', 'Descricao', 'Resolucao'];
+      const headers = ['Data', 'Condominio', 'Bloco', 'Apto', 'Tipo', 'Status', 'Descricao', 'Resolucao', 'Tem Foto Problema', 'Tem Foto Resolucao'];
       const rows = historyChamados.map(c => [
         new Date(c.createdAt).toLocaleDateString('pt-BR'),
         c.condominio,
@@ -372,7 +435,9 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
         c.problemType,
         c.status,
         c.descricao.replace(/\n/g, ' ').replace(/,/g, ';'),
-        (c.resolucao || '').replace(/\n/g, ' ').replace(/,/g, ';')
+        (c.resolucao || '').replace(/\n/g, ' ').replace(/,/g, ';'),
+        c.imageUrl ? 'Sim' : 'Não',
+        c.resolutionImageUrl ? 'Sim' : 'Não'
       ]);
 
       const csvContent = [
@@ -436,6 +501,56 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
         alternateRowStyles: { fillColor: [245, 245, 245] },
         margin: { top: 45 },
       });
+
+      // Add images if they exist
+      const chamadosWithImages = historyChamados.filter(c => c.imageUrl || c.resolutionImageUrl);
+      if (chamadosWithImages.length > 0) {
+        doc.addPage();
+        doc.setFontSize(16);
+        doc.setTextColor(0, 168, 89);
+        doc.text('Anexo: Fotos dos Chamados', 14, 22);
+        
+        let yPos = 35;
+        chamadosWithImages.forEach((c, index) => {
+          if (yPos > 240) {
+            doc.addPage();
+            yPos = 22;
+          }
+          
+          doc.setFontSize(10);
+          doc.setTextColor(50);
+          doc.setFont('helvetica', 'bold');
+          doc.text(`${c.condominio} - Bl ${c.bloco} Apt ${c.apto} (${new Date(c.createdAt).toLocaleDateString('pt-BR')})`, 14, yPos);
+          yPos += 5;
+          
+          doc.setFont('helvetica', 'normal');
+          doc.text(`ID: ${c.id.substring(0, 8)} - ${c.problemType === 'interfone' ? 'Interfone' : c.problemType === 'tv' ? 'TV' : 'Outro'}`, 14, yPos);
+          yPos += 10;
+
+          const imgWidth = 80;
+          const imgHeight = 60;
+
+          if (c.imageUrl) {
+            try {
+              doc.addImage(c.imageUrl, 'JPEG', 14, yPos, imgWidth, imgHeight);
+              doc.text('Foto do Problema', 14, yPos + imgHeight + 5);
+            } catch (e) {
+              console.error('Erro ao adicionar imagem do problema ao PDF', e);
+            }
+          }
+
+          if (c.resolutionImageUrl) {
+            try {
+              doc.addImage(c.resolutionImageUrl, 'JPEG', 100, yPos, imgWidth, imgHeight);
+              doc.text('Foto da Resolução', 100, yPos + imgHeight + 5);
+            } catch (e) {
+              console.error('Erro ao adicionar imagem da resolução ao PDF', e);
+            }
+          }
+
+          yPos += imgHeight + 20;
+        });
+      }
 
       const monthLabel = historyMonth === 'all' ? 'todos' : historyMonth + 1;
       doc.save(`relatorio_biotec_${monthLabel}_${historyYear}.pdf`);
@@ -1100,23 +1215,118 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                         />
                       </div>
 
-                      {isMaster && view === 'edit' && (
-                        <div className="flex flex-col gap-2">
-                          <label className="text-xs font-semibold uppercase tracking-wider text-slate-500" htmlFor="resolucao">Resolução / Notas Técnicas</label>
-                          <textarea 
-                            className="w-full rounded-lg border-emerald-100 bg-emerald-50/30 p-4 text-slate-900 focus:border-[#00a859] focus:ring-[#00a859] min-h-[100px]"
-                            id="resolucao"
-                            placeholder="Descreva o que foi feito para resolver este chamado..."
-                            value={resolucao}
-                            onChange={(e) => setResolucao(e.target.value)}
-                          />
+                      {/* Image Upload for Problem */}
+                      <div className="flex flex-col gap-2">
+                        <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Foto do Problema (Opcional)</label>
+                        <div className="flex flex-wrap gap-4">
+                          {imageUrl ? (
+                            <div className="relative h-32 w-32 overflow-hidden rounded-lg border border-slate-200">
+                              <Image src={imageUrl} alt="Problema" fill className="object-cover" />
+                              {!isLocked && (
+                                <button 
+                                  type="button"
+                                  onClick={() => removeImage('problem')}
+                                  className="absolute right-1 top-1 rounded-full bg-red-500 p-1 text-white shadow-md hover:bg-red-600"
+                                >
+                                  <X size={12} />
+                                </button>
+                              )}
+                              <button 
+                                type="button"
+                                onClick={() => setSelectedImage(imageUrl)}
+                                className="absolute left-1 top-1 rounded-full bg-black/50 p-1 text-white shadow-md hover:bg-black/70"
+                              >
+                                <Maximize2 size={12} />
+                              </button>
+                            </div>
+                          ) : !isLocked && (
+                            <label className="flex h-32 w-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 text-slate-400 transition-colors hover:border-[#00a859] hover:bg-[#00a859]/5 hover:text-[#00a859]">
+                              <Camera size={24} />
+                              <span className="text-[10px] font-bold uppercase">Anexar Foto</span>
+                              <input 
+                                type="file" 
+                                accept="image/*" 
+                                className="hidden" 
+                                onChange={(e) => handleImageUpload(e, 'problem')}
+                                disabled={isUploading}
+                              />
+                            </label>
+                          )}
                         </div>
+                      </div>
+
+                      {isMaster && view === 'edit' && (
+                        <>
+                          <div className="flex flex-col gap-2">
+                            <label className="text-xs font-semibold uppercase tracking-wider text-slate-500" htmlFor="resolucao">Resolução / Notas Técnicas</label>
+                            <textarea 
+                              className="w-full rounded-lg border-emerald-100 bg-emerald-50/30 p-4 text-slate-900 focus:border-[#00a859] focus:ring-[#00a859] min-h-[100px]"
+                              id="resolucao"
+                              placeholder="Descreva o que foi feito para resolver este chamado..."
+                              value={resolucao}
+                              onChange={(e) => setResolucao(e.target.value)}
+                            />
+                          </div>
+
+                          {/* Image Upload for Resolution */}
+                          <div className="flex flex-col gap-2">
+                            <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Foto da Resolução (Opcional)</label>
+                            <div className="flex flex-wrap gap-4">
+                              {resolutionImageUrl ? (
+                                <div className="relative h-32 w-32 overflow-hidden rounded-lg border border-slate-200">
+                                  <Image src={resolutionImageUrl} alt="Resolução" fill className="object-cover" />
+                                  <button 
+                                    type="button"
+                                    onClick={() => removeImage('resolution')}
+                                    className="absolute right-1 top-1 rounded-full bg-red-500 p-1 text-white shadow-md hover:bg-red-600"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                  <button 
+                                    type="button"
+                                    onClick={() => setSelectedImage(resolutionImageUrl)}
+                                    className="absolute left-1 top-1 rounded-full bg-black/50 p-1 text-white shadow-md hover:bg-black/70"
+                                  >
+                                    <Maximize2 size={12} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <label className="flex h-32 w-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 text-slate-400 transition-colors hover:border-[#00a859] hover:bg-[#00a859]/5 hover:text-[#00a859]">
+                                  <Camera size={24} />
+                                  <span className="text-[10px] font-bold uppercase">Foto do Serviço</span>
+                                  <input 
+                                    type="file" 
+                                    accept="image/*" 
+                                    className="hidden" 
+                                    onChange={(e) => handleImageUpload(e, 'resolution')}
+                                    disabled={isUploading}
+                                  />
+                                </label>
+                              )}
+                            </div>
+                          </div>
+                        </>
                       )}
 
-                      {!isMaster && view === 'edit' && resolucao && (
-                        <div className="rounded-lg bg-emerald-50 p-4 border border-emerald-100">
-                          <label className="text-[10px] font-bold uppercase text-emerald-600 mb-1 block">Resposta da Biotec</label>
-                          <p className="text-sm text-slate-700 whitespace-pre-wrap">{resolucao}</p>
+                      {!isMaster && view === 'edit' && (resolucao || resolutionImageUrl) && (
+                        <div className="rounded-lg bg-emerald-50 p-4 border border-emerald-100 flex flex-col gap-3">
+                          {resolucao && (
+                            <div>
+                              <label className="text-[10px] font-bold uppercase text-emerald-600 mb-1 block">Resposta da Biotec</label>
+                              <p className="text-sm text-slate-700 whitespace-pre-wrap">{resolucao}</p>
+                            </div>
+                          )}
+                          {resolutionImageUrl && (
+                            <div>
+                              <label className="text-[10px] font-bold uppercase text-emerald-600 mb-1 block">Foto do Serviço Concluído</label>
+                              <div className="relative h-32 w-32 overflow-hidden rounded-lg border border-emerald-200 cursor-pointer" onClick={() => setSelectedImage(resolutionImageUrl)}>
+                                <Image src={resolutionImageUrl} alt="Resolução" fill className="object-cover" />
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 hover:opacity-100 transition-opacity">
+                                  <Maximize2 size={20} className="text-white" />
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -1148,6 +1358,35 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                     </form>
                   )}
                 </AnimatePresence>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Image Modal */}
+          <AnimatePresence>
+            {selectedImage && (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
+                onClick={() => setSelectedImage(null)}
+              >
+                <button 
+                  className="absolute right-6 top-6 text-white hover:text-slate-300"
+                  onClick={() => setSelectedImage(null)}
+                >
+                  <X size={32} />
+                </button>
+                <div className="relative h-full w-full max-w-4xl" onClick={(e) => e.stopPropagation()}>
+                  <Image 
+                    src={selectedImage} 
+                    alt="Visualização" 
+                    fill 
+                    className="object-contain" 
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -1256,6 +1495,27 @@ function ChamadoCard({ chamado, onEdit, onDelete, showCondo, isMaster }: { chama
       <p className="mb-4 line-clamp-2 text-sm text-slate-600 flex-1">
         {chamado.descricao}
       </p>
+
+      {(chamado.imageUrl || chamado.resolutionImageUrl) && (
+        <div className="mb-4 flex gap-2">
+          {chamado.imageUrl && (
+            <div className="relative h-12 w-12 overflow-hidden rounded-lg border border-slate-100 bg-slate-50">
+              <Image src={chamado.imageUrl} alt="Problema" fill className="object-cover" />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/10">
+                <Paperclip size={10} className="text-white" />
+              </div>
+            </div>
+          )}
+          {chamado.resolutionImageUrl && (
+            <div className="relative h-12 w-12 overflow-hidden rounded-lg border border-emerald-100 bg-emerald-50">
+              <Image src={chamado.resolutionImageUrl} alt="Resolução" fill className="object-cover" />
+              <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/20">
+                <CheckCircle2 size={10} className="text-emerald-600" />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mt-auto pt-4 border-t border-slate-50 flex items-center justify-between text-[10px] text-slate-400">
         <span className="font-medium">ID: {chamado.id.substring(0, 8)}</span>

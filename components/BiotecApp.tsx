@@ -777,7 +777,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                   </div>
                   <div className="flex items-center gap-2">
                     <button 
-                      onClick={fetchChamados}
+                      onClick={() => fetchChamados()}
                       disabled={loading}
                       title="Atualizar lista"
                       className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-[#00a859] transition-all disabled:opacity-50"

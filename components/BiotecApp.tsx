@@ -829,6 +829,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                         chamado={chamado} 
                         onEdit={() => handleEdit(chamado)}
                         onDelete={() => handleDelete(chamado.id)}
+                        onImageClick={(url) => setSelectedImage(url)}
                         showCondo={isMaster}
                         isMaster={isMaster}
                       />
@@ -1538,7 +1539,7 @@ function ProblemOption({ id, icon, label, selected, onClick, disabled }: { id: s
   );
 }
 
-function ChamadoCard({ chamado, onEdit, onDelete, showCondo, isMaster }: { chamado: Chamado, onEdit: () => void, onDelete: () => void, showCondo?: boolean, isMaster?: boolean }) {
+function ChamadoCard({ chamado, onEdit, onDelete, onImageClick, showCondo, isMaster }: { chamado: Chamado, onEdit: () => void, onDelete: () => void, onImageClick: (url: string) => void, showCondo?: boolean, isMaster?: boolean }) {
   const statusColors = {
     'Pendente': 'bg-amber-100 text-amber-700 border-amber-200',
     'Em Andamento': 'bg-blue-100 text-blue-700 border-blue-200',
@@ -1595,7 +1596,7 @@ function ChamadoCard({ chamado, onEdit, onDelete, showCondo, isMaster }: { chama
       {(chamado.imageUrl || chamado.resolutionImageUrl) && (
         <div className="mb-4 flex gap-2">
           {chamado.imageUrl && (
-            <div className="relative h-12 w-12 overflow-hidden rounded-lg border border-slate-100 bg-slate-50 cursor-pointer" onClick={() => setSelectedImage(chamado.imageUrl!)}>
+            <div className="relative h-12 w-12 overflow-hidden rounded-lg border border-slate-100 bg-slate-50 cursor-pointer" onClick={() => onImageClick(chamado.imageUrl!)}>
               <img src={chamado.imageUrl} alt="Problema" className="h-full w-full object-cover" />
               <div className="absolute inset-0 flex items-center justify-center bg-black/10">
                 <Paperclip size={10} className="text-white" />
@@ -1603,7 +1604,7 @@ function ChamadoCard({ chamado, onEdit, onDelete, showCondo, isMaster }: { chama
             </div>
           )}
           {chamado.resolutionImageUrl && (
-            <div className="relative h-12 w-12 overflow-hidden rounded-lg border border-emerald-100 bg-emerald-50 cursor-pointer" onClick={() => setSelectedImage(chamado.resolutionImageUrl!)}>
+            <div className="relative h-12 w-12 overflow-hidden rounded-lg border border-emerald-100 bg-emerald-50 cursor-pointer" onClick={() => onImageClick(chamado.resolutionImageUrl!)}>
               <img src={chamado.resolutionImageUrl} alt="Resolução" className="h-full w-full object-cover" />
               <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/20">
                 <CheckCircle2 size={10} className="text-emerald-600" />

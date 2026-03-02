@@ -216,15 +216,19 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
   };
 
   const filteredChamados = React.useMemo(() => {
-    let base = isMaster ? chamados : chamados.filter(c => c.createdBy === user);
+    let base = isMaster 
+      ? chamados 
+      : chamados.filter(c => c.createdBy === user || (currentUserInfo?.condominio && c.condominio === currentUserInfo.condominio));
     if (statusFilter !== 'Todos') {
       base = base.filter(c => c.status === statusFilter);
     }
     return base;
-  }, [chamados, isMaster, user, statusFilter]);
+  }, [chamados, isMaster, user, statusFilter, currentUserInfo]);
 
   const historyChamados = React.useMemo(() => {
-    const base = isMaster ? chamados : chamados.filter(c => c.createdBy === user);
+    const base = isMaster 
+      ? chamados 
+      : chamados.filter(c => c.createdBy === user || (currentUserInfo?.condominio && c.condominio === currentUserInfo.condominio));
     return base.filter(c => {
       const date = new Date(c.createdAt);
       const matchesMonth = historyMonth === 'all' || date.getMonth() === historyMonth;
@@ -232,7 +236,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
       const matchesCondo = historyCondo === 'all' || c.condominio === historyCondo;
       return matchesMonth && matchesYear && matchesCondo;
     });
-  }, [chamados, isMaster, user, historyMonth, historyYear, historyCondo]);
+  }, [chamados, isMaster, user, historyMonth, historyYear, historyCondo, currentUserInfo]);
 
   const stats = React.useMemo(() => {
     const total = filteredChamados.length;

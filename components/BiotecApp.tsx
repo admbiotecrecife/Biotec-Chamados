@@ -784,7 +784,8 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
             <h1 className="text-lg font-bold md:text-xl truncate max-w-[200px] sm:max-w-none">
               {view === 'list' ? (isMaster ? 'Visão Geral Biotec' : 'Dashboard de Chamados') : 
                view === 'create' ? 'Novo Chamado' : 
-               view === 'history' ? 'Histórico e Relatórios' : 'Editar Chamado'}
+               view === 'history' ? 'Histórico e Relatórios' : 
+               view === 'perfil' ? 'Meu Perfil' : 'Editar Chamado'}
             </h1>
           </div>
           <div className="flex items-center gap-4">
@@ -1238,6 +1239,73 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                   </div>
                 </div>
               </motion.div>
+            ) : view === 'perfil' ? (
+              <motion.div
+                key="perfil"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-8 shadow-xl"
+              >
+                <div className="mb-8 text-center">
+                  <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-[#00a859]/10 text-[#00a859]">
+                    <UserIcon size={40} />
+                  </div>
+                  <h2 className="text-2xl font-bold text-slate-900">Meu Perfil</h2>
+                  <p className="text-slate-500">{user}</p>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="rounded-xl bg-slate-50 p-6 border border-slate-100">
+                    <h3 className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-500">Informações da Conta</h3>
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-500">Tipo de Acesso:</span>
+                        <span className="font-bold text-slate-900 uppercase">{isMaster ? 'Administrador Master' : 'Condomínio'}</span>
+                      </div>
+                      {!isMaster && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-500">Condomínio:</span>
+                          <span className="font-bold text-slate-900">{currentUserInfo?.condominio}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleUpdatePassword} className="space-y-4">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">Alterar Senha</h3>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold text-slate-500" htmlFor="newPass">Nova Senha</label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                        <input 
+                          type="password"
+                          id="newPass"
+                          placeholder="Digite sua nova senha"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          className="w-full rounded-lg border-slate-200 bg-white py-3 pl-10 text-slate-900 focus:border-[#00a859] focus:ring-[#00a859]"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <button 
+                      type="submit"
+                      disabled={isChangingPass}
+                      className="w-full rounded-lg bg-[#00a859] py-3 font-bold text-white transition-all hover:opacity-90 disabled:opacity-50"
+                    >
+                      {isChangingPass ? 'Atualizando...' : 'Salvar Nova Senha'}
+                    </button>
+                  </form>
+                </div>
+
+                <button 
+                  onClick={() => setView('list')}
+                  className="mt-8 w-full text-sm font-bold text-slate-400 hover:text-slate-600"
+                >
+                  Voltar para o Início
+                </button>
+              </motion.div>
             ) : (
               <motion.div 
                 key="form"
@@ -1593,75 +1661,6 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                     </form>
                   )}
                 </AnimatePresence>
-              </motion.div>
-            )}
-
-            {view === 'perfil' && (
-              <motion.div
-                key="perfil"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-8 shadow-xl"
-              >
-                <div className="mb-8 text-center">
-                  <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-[#00a859]/10 text-[#00a859]">
-                    <UserIcon size={40} />
-                  </div>
-                  <h2 className="text-2xl font-bold text-slate-900">Meu Perfil</h2>
-                  <p className="text-slate-500">{user}</p>
-                </div>
-
-                <div className="space-y-6">
-                  <div className="rounded-xl bg-slate-50 p-6 border border-slate-100">
-                    <h3 className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-500">Informações da Conta</h3>
-                    <div className="space-y-3">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-slate-500">Tipo de Acesso:</span>
-                        <span className="font-bold text-slate-900 uppercase">{isMaster ? 'Administrador Master' : 'Condomínio'}</span>
-                      </div>
-                      {!isMaster && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-slate-500">Condomínio:</span>
-                          <span className="font-bold text-slate-900">{currentUserInfo?.condominio}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <form onSubmit={handleUpdatePassword} className="space-y-4">
-                    <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">Alterar Senha</h3>
-                    <div className="space-y-2">
-                      <label className="text-xs font-semibold text-slate-500" htmlFor="newPass">Nova Senha</label>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                        <input 
-                          type="password"
-                          id="newPass"
-                          placeholder="Digite sua nova senha"
-                          value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
-                          className="w-full rounded-lg border-slate-200 bg-white py-3 pl-10 text-slate-900 focus:border-[#00a859] focus:ring-[#00a859]"
-                          required
-                        />
-                      </div>
-                    </div>
-                    <button 
-                      type="submit"
-                      disabled={isChangingPass}
-                      className="w-full rounded-lg bg-[#00a859] py-3 font-bold text-white transition-all hover:opacity-90 disabled:opacity-50"
-                    >
-                      {isChangingPass ? 'Atualizando...' : 'Salvar Nova Senha'}
-                    </button>
-                  </form>
-                </div>
-
-                <button 
-                  onClick={() => setView('list')}
-                  className="mt-8 w-full text-sm font-bold text-slate-400 hover:text-slate-600"
-                >
-                  Voltar para o Início
-                </button>
               </motion.div>
             )}
           </AnimatePresence>

@@ -310,14 +310,18 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     }
   };
 
-  const filteredChamados = React.useMemo(() => {
+  const baseChamados = React.useMemo(() => {
     const userLower = user.toLowerCase();
-    let base = isMaster 
+    return isMaster 
       ? chamados 
       : chamados.filter(c => 
           c.createdBy.toLowerCase() === userLower || 
           (currentUserInfo?.condominio && c.condominio.toLowerCase() === currentUserInfo.condominio.toLowerCase())
         );
+  }, [chamados, isMaster, user, currentUserInfo]);
+
+  const filteredChamados = React.useMemo(() => {
+    let base = [...baseChamados];
     if (statusFilter !== 'Todos') {
       base = base.filter(c => c.status === statusFilter);
     }
@@ -332,39 +336,34 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
       );
     }
     return base;
-  }, [chamados, isMaster, user, statusFilter, currentUserInfo, searchQuery]);
+  }, [baseChamados, statusFilter, searchQuery]);
 
   const historyChamados = React.useMemo(() => {
-    const userLower = user.toLowerCase();
-    const base = isMaster 
-      ? chamados 
-      : chamados.filter(c => 
-          c.createdBy.toLowerCase() === userLower || 
-          (currentUserInfo?.condominio && c.condominio.toLowerCase() === currentUserInfo.condominio.toLowerCase())
-        );
-    return base.filter(c => {
+    return baseChamados.filter(c => {
       const date = new Date(c.createdAt);
       const matchesMonth = historyMonth === 'all' || date.getMonth() === historyMonth;
       const matchesYear = date.getFullYear() === historyYear;
       const matchesCondo = historyCondo === 'all' || c.condominio === historyCondo;
       return matchesMonth && matchesYear && matchesCondo;
     });
-  }, [chamados, isMaster, user, historyMonth, historyYear, historyCondo, currentUserInfo]);
+  }, [baseChamados, historyMonth, historyYear, historyCondo]);
 
   const stats = React.useMemo(() => {
-    const total = filteredChamados.length;
-    const pendentes = filteredChamados.filter(c => c.status === 'Pendente').length;
-    const emAndamento = filteredChamados.filter(c => c.status === 'Em Andamento').length;
-    const concluidos = filteredChamados.filter(c => c.status === 'Concluído').length;
+    const total = baseChamados.length;
+    const pendentes = baseChamados.filter(c => c.status === 'Pendente').length;
+    const emAndamento = baseChamados.filter(c => c.status === 'Em Andamento').length;
+    const concluidos = baseChamados.filter(c => c.status === 'Concluído').length;
+    const altaPrioridade = baseChamados.filter(c => c.prioridade === 'Alta' && c.status !== 'Concluído').length;
+    const hoje = baseChamados.filter(c => new Date(c.createdAt).toDateString() === new Date().toDateString()).length;
     
     // Group by condominium
     const byCondo: Record<string, number> = {};
-    filteredChamados.forEach(c => {
+    baseChamados.forEach(c => {
       byCondo[c.condominio] = (byCondo[c.condominio] || 0) + 1;
     });
 
-    return { total, pendentes, emAndamento, concluidos, byCondo };
-  }, [filteredChamados]);
+    return { total, pendentes, emAndamento, concluidos, byCondo, altaPrioridade, hoje };
+  }, [baseChamados]);
 
   const resetForm = () => {
     setProblemType(null);
@@ -627,12 +626,13 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
         doc.text(`Condomínio: ${historyCondo}`, 14, 40);
       }
 
-      const tableColumn = ["Data", "Condomínio", "Local", "Tipo", "Status", "Resolução"];
+      const tableColumn = ["Data", "Condomínio", "Local", "Tipo", "Prioridade", "Status", "Resolução"];
       const tableRows = historyChamados.map(c => [
         new Date(c.createdAt).toLocaleDateString('pt-BR'),
         c.condominio,
         `Bl ${c.bloco} - Apt ${c.apto}`,
         c.problemType === 'interfone' ? 'Interfone' : c.problemType === 'tv' ? 'TV' : 'Outro',
+        c.prioridade || 'Média',
         c.status,
         c.resolucao || '-'
       ]);
@@ -949,13 +949,13 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                     <div className="rounded-xl bg-slate-50 p-4">
                       <p className="text-xs font-bold uppercase text-slate-500">Chamados Hoje</p>
                       <p className="mt-1 text-2xl font-bold text-blue-600">
-                        {chamados.filter(c => new Date(c.createdAt).toDateString() === new Date().toDateString()).length}
+                        {stats.hoje}
                       </p>
                     </div>
                     <div className="rounded-xl bg-slate-50 p-4">
                       <p className="text-xs font-bold uppercase text-slate-500">Chamados Alta Prioridade</p>
                       <p className="mt-1 text-2xl font-bold text-red-600">
-                        {chamados.filter(c => c.prioridade === 'Alta' && c.status !== 'Concluído').length}
+                        {stats.altaPrioridade}
                       </p>
                     </div>
                   </div>

@@ -40,7 +40,8 @@ import {
   BarChart3,
   PieChart as PieChartIcon,
   TrendingUp,
-  ShieldAlert
+  ShieldAlert,
+  Star
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Image from 'next/image';
@@ -62,7 +63,7 @@ import autoTable from 'jspdf-autotable';
 
 type ProblemType = 'interfone' | 'tv' | 'outro' | null;
 type Priority = 'Baixa' | 'Média' | 'Alta';
-type View = 'list' | 'create' | 'edit' | 'history' | 'condos' | 'perfil';
+type View = 'list' | 'create' | 'edit' | 'history' | 'condos' | 'perfil' | 'dashboard';
 
 interface User {
   login: string;
@@ -85,6 +86,8 @@ interface Chamado {
   createdBy: string;
   imageUrl?: string;
   resolutionImageUrl?: string;
+  feedbackRating?: number;
+  feedbackComment?: string;
 }
 
 interface BiotecAppProps {
@@ -94,7 +97,8 @@ interface BiotecAppProps {
 
 export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
   const isMaster = user.toLowerCase() === 'admin@biotec.com';
-  const [view, setView] = React.useState<View>(isMaster ? 'list' : 'create');
+  const [view, setView] = React.useState<View>('list');
+  const [isInitialized, setIsInitialized] = React.useState(false);
   const [chamados, setChamados] = React.useState<Chamado[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
@@ -139,7 +143,15 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
   const [newPassword, setNewPassword] = React.useState('');
   const [submitted, setSubmitted] = React.useState(false);
 
+  const [feedbackRating, setFeedbackRating] = React.useState<number>(0);
+  const [feedbackComment, setFeedbackComment] = React.useState('');
+
   const isLocked = !isMaster && view === 'edit' && status === 'Concluído';
+
+  const handleSetView = (newView: View) => {
+    setView(newView);
+    localStorage.setItem(`biotec_view_${user}`, newView);
+  };
 
   const fetchChamados = async (isSilent = false) => {
     if (!isSilent) setLoading(true);
@@ -203,6 +215,15 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
   };
 
   React.useEffect(() => {
+    // Load persisted view
+    const savedView = localStorage.getItem(`biotec_view_${user}`);
+    if (savedView) {
+      setView(savedView as View);
+    } else {
+      setView(isMaster ? 'dashboard' : 'list');
+    }
+    setIsInitialized(true);
+
     fetchChamados();
     
     // Request notification permission
@@ -359,6 +380,8 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     setSubmitted(false);
     setImageUrl('');
     setResolutionImageUrl('');
+    setFeedbackRating(0);
+    setFeedbackComment('');
   };
 
   const handleCreate = () => {
@@ -378,6 +401,8 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     setStatus(chamado.status);
     setImageUrl(chamado.imageUrl || '');
     setResolutionImageUrl(chamado.resolutionImageUrl || '');
+    setFeedbackRating(chamado.feedbackRating || 0);
+    setFeedbackComment(chamado.feedbackComment || '');
     setView('edit');
   };
 
@@ -466,7 +491,9 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
       resolucao, 
       status,
       imageUrl,
-      resolutionImageUrl
+      resolutionImageUrl,
+      feedbackRating,
+      feedbackComment
     };
     
     // Só envia createdBy na criação para não sobrescrever o dono original no edit
@@ -709,10 +736,18 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
         <nav className="mt-8 flex flex-col gap-2">
           <NavItem 
             icon={<Home size={20} />} 
-            label={isMaster ? "Dashboard Master" : "Início"} 
+            label={isMaster ? "Lista de Chamados" : "Início"} 
             active={view === 'list'} 
-            onClick={() => { setView('list'); setIsSidebarOpen(false); }}
+            onClick={() => { handleSetView('list'); setIsSidebarOpen(false); }}
           />
+          {isMaster && (
+            <NavItem 
+              icon={<TrendingUp size={20} />} 
+              label="Dashboard" 
+              active={view === 'dashboard'} 
+              onClick={() => { handleSetView('dashboard'); setIsSidebarOpen(false); }}
+            />
+          )}
           <NavItem 
             icon={<Ticket size={20} />} 
             label="Abertura de Chamado" 
@@ -723,21 +758,21 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
             icon={<History size={20} />} 
             label="Histórico" 
             active={view === 'history'} 
-            onClick={() => { setView('history'); setIsSidebarOpen(false); }}
+            onClick={() => { handleSetView('history'); setIsSidebarOpen(false); }}
           />
           {isMaster && (
             <NavItem 
               icon={<Users size={20} />} 
               label="Condomínios" 
               active={view === 'condos'} 
-              onClick={() => { setView('condos'); setIsSidebarOpen(false); }}
+              onClick={() => { handleSetView('condos'); setIsSidebarOpen(false); }}
             />
           )}
           <NavItem 
             icon={<UserIcon size={20} />} 
             label="Meu Perfil" 
             active={view === 'perfil'} 
-            onClick={() => { setView('perfil'); setIsSidebarOpen(false); }}
+            onClick={() => { handleSetView('perfil'); setIsSidebarOpen(false); }}
           />
         </nav>
 
@@ -782,9 +817,11 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
               <Menu size={20} />
             </button>
             <h1 className="text-lg font-bold md:text-xl truncate max-w-[200px] sm:max-w-none">
-              {view === 'list' ? (isMaster ? 'Visão Geral Biotec' : 'Dashboard de Chamados') : 
+              {view === 'dashboard' ? 'Dashboard Biotec' : 
+               view === 'list' ? (isMaster ? 'Lista de Chamados' : 'Dashboard de Chamados') : 
                view === 'create' ? 'Novo Chamado' : 
                view === 'history' ? 'Histórico e Relatórios' : 
+               view === 'condos' ? 'Gerenciar Condomínios' : 
                view === 'perfil' ? 'Meu Perfil' : 'Editar Chamado'}
             </h1>
           </div>
@@ -805,15 +842,14 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
         {/* Content Area */}
         <div className="mx-auto w-full max-w-6xl p-6 md:p-10 pb-24 md:pb-10">
           <AnimatePresence mode="wait">
-            {view === 'list' ? (
-              <motion.div 
-                key="list"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                className="flex flex-col gap-8"
+            {view === 'dashboard' && isMaster ? (
+              <motion.div
+                key="dashboard"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="space-y-8"
               >
-                {/* Stats */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   <StatCard label="Total de Chamados" value={stats.total} icon={<Ticket className="text-blue-500" />} />
                   <StatCard label="Pendentes" value={stats.pendentes} icon={<Clock className="text-amber-500" />} />
@@ -821,7 +857,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                   <StatCard label="Concluídos" value={stats.concluidos} icon={<CheckCircle2 className="text-green-500" />} />
                 </div>
 
-                {isMaster && Object.keys(stats.byCondo).length > 0 && (
+                {Object.keys(stats.byCondo).length > 0 && (
                   <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                     {/* Pie Chart: Status Distribution */}
                     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -900,6 +936,46 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                     </div>
                   </div>
                 )}
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <h3 className="mb-4 text-lg font-bold">Resumo de Atividade</h3>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <div className="rounded-xl bg-slate-50 p-4">
+                      <p className="text-xs font-bold uppercase text-slate-500">Taxa de Conclusão</p>
+                      <p className="mt-1 text-2xl font-bold text-emerald-600">
+                        {stats.total > 0 ? Math.round((stats.concluidos / stats.total) * 100) : 0}%
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 p-4">
+                      <p className="text-xs font-bold uppercase text-slate-500">Chamados Hoje</p>
+                      <p className="mt-1 text-2xl font-bold text-blue-600">
+                        {chamados.filter(c => new Date(c.createdAt).toDateString() === new Date().toDateString()).length}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 p-4">
+                      <p className="text-xs font-bold uppercase text-slate-500">Chamados Alta Prioridade</p>
+                      <p className="mt-1 text-2xl font-bold text-red-600">
+                        {chamados.filter(c => c.prioridade === 'Alta' && c.status !== 'Concluído').length}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            ) : view === 'list' ? (
+              <motion.div 
+                key="list"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                className="flex flex-col gap-8"
+              >
+                {/* Stats */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <StatCard label="Total de Chamados" value={stats.total} icon={<Ticket className="text-blue-500" />} />
+                  <StatCard label="Pendentes" value={stats.pendentes} icon={<Clock className="text-amber-500" />} />
+                  <StatCard label="Em Andamento" value={stats.emAndamento} icon={<AlertCircle className="text-indigo-500" />} />
+                  <StatCard label="Concluídos" value={stats.concluidos} icon={<CheckCircle2 className="text-green-500" />} />
+                </div>
 
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
@@ -1633,15 +1709,59 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                         </div>
                       )}
 
+                      {status === 'Concluído' && (
+                        <div className="mt-4 space-y-4 rounded-xl border border-amber-100 bg-amber-50/50 p-6">
+                          <div className="flex items-center gap-2 text-amber-600">
+                            <Star size={20} className="fill-amber-400" />
+                            <h3 className="text-sm font-bold uppercase tracking-wider">Avaliação do Serviço</h3>
+                          </div>
+                          
+                          <div className="flex flex-col gap-4">
+                            <div className="flex flex-col gap-2">
+                              <label className="text-xs font-semibold text-slate-500">Nota (1 a 5 estrelas)</label>
+                              <div className="flex items-center gap-2">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <button
+                                    key={star}
+                                    type="button"
+                                    disabled={isMaster || (chamados.find(c => c.id === editingId)?.feedbackRating ?? 0) > 0}
+                                    onClick={() => setFeedbackRating(star)}
+                                    className={`transition-all ${(isMaster || (chamados.find(c => c.id === editingId)?.feedbackRating ?? 0) > 0) ? 'cursor-default' : 'hover:scale-110'}`}
+                                  >
+                                    <Star 
+                                      size={28} 
+                                      className={star <= feedbackRating ? "fill-amber-400 text-amber-400" : "text-slate-300"} 
+                                    />
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            
+                            <div className="flex flex-col gap-2">
+                              <label className="text-xs font-semibold text-slate-500" htmlFor="feedbackComment">Comentário Adicional</label>
+                              <textarea 
+                                id="feedbackComment"
+                                value={feedbackComment}
+                                onChange={(e) => setFeedbackComment(e.target.value)}
+                                disabled={isMaster || (chamados.find(c => c.id === editingId)?.feedbackRating ?? 0) > 0}
+                                placeholder="Como foi sua experiência com este atendimento?"
+                                className="w-full rounded-lg border-slate-200 bg-white p-3 text-sm focus:border-amber-400 focus:ring-amber-400 disabled:bg-slate-50 disabled:text-slate-500"
+                                rows={3}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="mt-4 pt-4 border-t border-slate-100 flex gap-3">
                         <button 
                           type="button"
                           onClick={() => setView('list')}
-                          className={`${isLocked ? 'flex-1' : 'flex-1'} rounded-lg border border-slate-200 py-4 text-base font-bold text-slate-600 hover:bg-slate-50 transition-all`}
+                          className="flex-1 rounded-lg border border-slate-200 py-4 text-base font-bold text-slate-600 hover:bg-slate-50 transition-all"
                         >
-                          {isLocked ? 'Voltar' : 'Cancelar'}
+                          {isLocked && (isMaster || (chamados.find(c => c.id === editingId)?.feedbackRating ?? 0) > 0) ? 'Voltar' : 'Cancelar'}
                         </button>
-                        {!isLocked && (
+                        {(!isLocked || (!isMaster && status === 'Concluído' && (chamados.find(c => c.id === editingId)?.feedbackRating ?? 0) === 0)) && (
                           <button 
                             type="submit"
                             disabled={isSubmitting}
@@ -1652,7 +1772,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                             ) : (
                               <>
                                 <Send size={20} />
-                                {view === 'edit' ? 'Salvar Alterações' : 'Enviar Chamado'}
+                                {view === 'edit' ? (status === 'Concluído' ? 'Enviar Avaliação' : 'Salvar Alterações') : 'Enviar Chamado'}
                               </>
                             )}
                           </button>
@@ -1740,12 +1860,21 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
         {/* Mobile Bottom Nav */}
         <div className="fixed bottom-0 left-0 right-0 z-[60] flex h-16 items-center justify-around border-t border-slate-200 bg-white px-2 md:hidden">
           <button 
-            onClick={() => setView('list')}
+            onClick={() => handleSetView('list')}
             className={`flex flex-col items-center gap-1 ${view === 'list' ? 'text-[#00a859]' : 'text-slate-400'}`}
           >
             <Home size={20} />
             <span className="text-[10px] font-bold">Início</span>
           </button>
+          {isMaster && (
+            <button 
+              onClick={() => handleSetView('dashboard')}
+              className={`flex flex-col items-center gap-1 ${view === 'dashboard' ? 'text-[#00a859]' : 'text-slate-400'}`}
+            >
+              <TrendingUp size={20} />
+              <span className="text-[10px] font-bold">Dash</span>
+            </button>
+          )}
           <button 
             onClick={() => handleCreate()}
             className={`flex flex-col items-center gap-1 ${view === 'create' ? 'text-[#00a859]' : 'text-slate-400'}`}
@@ -1754,7 +1883,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
             <span className="text-[10px] font-bold">Novo</span>
           </button>
           <button 
-            onClick={() => setView('history')}
+            onClick={() => handleSetView('history')}
             className={`flex flex-col items-center gap-1 ${view === 'history' ? 'text-[#00a859]' : 'text-slate-400'}`}
           >
             <History size={20} />
@@ -1762,7 +1891,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
           </button>
           {isMaster && (
             <button 
-              onClick={() => setView('condos')}
+              onClick={() => handleSetView('condos')}
               className={`flex flex-col items-center gap-1 ${view === 'condos' ? 'text-[#00a859]' : 'text-slate-400'}`}
             >
               <Users size={20} />
@@ -1770,7 +1899,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
             </button>
           )}
           <button 
-            onClick={() => setView('perfil')}
+            onClick={() => handleSetView('perfil')}
             className={`flex flex-col items-center gap-1 ${view === 'perfil' ? 'text-[#00a859]' : 'text-slate-400'}`}
           >
             <UserIcon size={20} />
@@ -1946,8 +2075,23 @@ function ChamadoCard({ chamado, onEdit, onDelete, onImageClick, showCondo, isMas
       )}
 
       <div className="mt-auto pt-4 border-t border-slate-50 flex items-center justify-between text-[10px] text-slate-400">
-        <span className="font-medium">ID: {chamado.id.substring(0, 8)}</span>
-        <span>{new Date(chamado.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+        <div className="flex flex-col gap-1">
+          <span className="font-medium">ID: {chamado.id.substring(0, 8)}</span>
+          <span>{new Date(chamado.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+        </div>
+        {chamado.status === 'Concluído' && (
+          <div className="flex flex-col items-end gap-1">
+            {chamado.feedbackRating ? (
+              <div className="flex items-center gap-0.5 text-amber-400">
+                {[...Array(5)].map((_, i) => (
+                  <Star key={i} size={10} fill={i < chamado.feedbackRating! ? "currentColor" : "none"} />
+                ))}
+              </div>
+            ) : !isMaster ? (
+              <span className="rounded-full bg-[#00a859]/10 px-2 py-0.5 font-bold text-[#00a859]">Avaliar</span>
+            ) : null}
+          </div>
+        )}
       </div>
     </div>
   );

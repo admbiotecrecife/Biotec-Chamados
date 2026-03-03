@@ -20,6 +20,8 @@ export async function PUT(
     if (data.problemType) updateData.problem_type = data.problemType;
     if (data.imageUrl !== undefined) updateData.image_url = data.imageUrl;
     if (data.resolutionImageUrl !== undefined) updateData.resolution_image_url = data.resolutionImageUrl;
+    if (data.feedbackRating !== undefined) updateData.feedback_rating = data.feedbackRating;
+    if (data.feedbackComment !== undefined) updateData.feedback_comment = data.feedbackComment;
 
     const { data: updated, error } = await supabase
       .from('chamados')

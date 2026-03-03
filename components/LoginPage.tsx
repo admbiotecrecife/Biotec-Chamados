@@ -21,23 +21,20 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
     setError('');
 
     try {
-      const res = await fetch('/api/users');
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ login: email, pass: password }),
+      });
+      
       const data = await res.json();
 
       if (!res.ok) {
         throw new Error(data.error || 'Erro na resposta do servidor');
       }
 
-      if (!Array.isArray(data)) {
-        throw new Error('Formato de dados inválido recebido do servidor');
-      }
-
-      const userFound = data.find((u: any) => 
-        u.login.toLowerCase().trim() === email.toLowerCase().trim() && u.pass.trim() === password.trim()
-      );
-
-      if (userFound) {
-        onLogin(userFound.login);
+      if (data.success) {
+        onLogin(data.user.login);
       } else {
         setError('Usuário ou senha incorretos. Verifique suas credenciais.');
       }

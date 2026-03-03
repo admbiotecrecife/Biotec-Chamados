@@ -60,8 +60,8 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
             <span className="text-3xl font-bold">b</span>
           </div>
-          <h1 className="text-2xl font-bold">Biotec</h1>
-          <p className="mt-2 text-white/80">Painel Administrativo de Condomínios</p>
+          <h1 className="text-2xl font-bold">Painel de Chamados</h1>
+          <p className="mt-2 text-white/80">Gestão de Manutenção Biotec</p>
         </div>
 
         <div className="p-8">

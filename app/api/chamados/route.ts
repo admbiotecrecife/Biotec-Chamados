@@ -31,6 +31,7 @@ export async function POST(request: Request) {
         descricao: data.descricao,
         resolucao: data.resolucao || '',
         status: 'Pendente',
+        prioridade: data.prioridade || 'Média',
         created_by: data.createdBy || 'Sistema',
         image_url: data.imageUrl || null,
         resolution_image_url: data.resolutionImageUrl || null

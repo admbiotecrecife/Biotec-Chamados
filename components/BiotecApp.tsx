@@ -34,16 +34,35 @@ import {
   Menu,
   Eye,
   Lock,
-  RefreshCw
+  RefreshCw,
+  Search,
+  User as UserIcon,
+  BarChart3,
+  PieChart as PieChartIcon,
+  TrendingUp,
+  ShieldAlert
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Image from 'next/image';
+import { 
+  PieChart, 
+  Pie, 
+  Cell, 
+  ResponsiveContainer, 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  Tooltip, 
+  Legend 
+} from 'recharts';
 
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 type ProblemType = 'interfone' | 'tv' | 'outro' | null;
-type View = 'list' | 'create' | 'edit' | 'history' | 'condos';
+type Priority = 'Baixa' | 'Média' | 'Alta';
+type View = 'list' | 'create' | 'edit' | 'history' | 'condos' | 'perfil';
 
 interface User {
   login: string;
@@ -58,6 +77,7 @@ interface Chamado {
   bloco: string;
   apto: string;
   problemType: ProblemType;
+  prioridade: Priority;
   descricao: string;
   resolucao?: string;
   status: 'Pendente' | 'Em Andamento' | 'Concluído';
@@ -94,10 +114,12 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
   const [historyYear, setHistoryYear] = React.useState(new Date().getFullYear());
   const [historyCondo, setHistoryCondo] = React.useState('all');
   const [statusFilter, setStatusFilter] = React.useState<string>('Todos');
+  const [searchQuery, setSearchQuery] = React.useState('');
 
   // Form State
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [problemType, setProblemType] = React.useState<ProblemType>(null);
+  const [prioridade, setPrioridade] = React.useState<Priority>('Média');
   const [condominio, setCondominio] = React.useState('');
   const [bloco, setBloco] = React.useState('');
   const [apto, setApto] = React.useState('');
@@ -113,6 +135,8 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
   const [newTicketToast, setNewTicketToast] = React.useState<{ id: string, condo: string } | null>(null);
   
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isChangingPass, setIsChangingPass] = React.useState(false);
+  const [newPassword, setNewPassword] = React.useState('');
   const [submitted, setSubmitted] = React.useState(false);
 
   const isLocked = !isMaster && view === 'edit' && status === 'Concluído';
@@ -130,6 +154,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
         createdAt: c.created_at || c.createdAt || new Date().toISOString(),
         createdBy: String(c.created_by || c.createdBy || 'Sistema'),
         problemType: c.problem_type || c.problemType || 'outro',
+        prioridade: c.prioridade || 'Média',
         imageUrl: c.image_url || c.imageUrl || '',
         resolutionImageUrl: c.resolution_image_url || c.resolutionImageUrl || '',
         condominio: String(c.condominio || ''),
@@ -275,8 +300,18 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     if (statusFilter !== 'Todos') {
       base = base.filter(c => c.status === statusFilter);
     }
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      base = base.filter(c => 
+        c.condominio.toLowerCase().includes(q) || 
+        c.descricao.toLowerCase().includes(q) ||
+        c.id.toLowerCase().includes(q) ||
+        c.bloco.toLowerCase().includes(q) ||
+        c.apto.toLowerCase().includes(q)
+      );
+    }
     return base;
-  }, [chamados, isMaster, user, statusFilter, currentUserInfo]);
+  }, [chamados, isMaster, user, statusFilter, currentUserInfo, searchQuery]);
 
   const historyChamados = React.useMemo(() => {
     const userLower = user.toLowerCase();
@@ -312,6 +347,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
 
   const resetForm = () => {
     setProblemType(null);
+    setPrioridade('Média');
     setCondominio(isMaster ? '' : (currentUserInfo?.condominio || ''));
     setBloco('');
     setApto('');
@@ -333,6 +369,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
   const handleEdit = (chamado: Chamado) => {
     setEditingId(chamado.id);
     setProblemType(chamado.problemType);
+    setPrioridade(chamado.prioridade || 'Média');
     setCondominio(chamado.condominio);
     setBloco(chamado.bloco);
     setApto(chamado.apto);
@@ -424,6 +461,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
       bloco, 
       apto, 
       problemType: finalProblemType, 
+      prioridade,
       descricao, 
       resolucao, 
       status,
@@ -469,6 +507,33 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
       alert(error.message || 'Erro inesperado ao salvar.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPassword) return;
+    
+    setIsChangingPass(true);
+    try {
+      const res = await fetch(`/api/users/${user}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pass: newPassword.trim() }),
+      });
+      
+      if (res.ok) {
+        setNewPassword('');
+        alert('Senha atualizada com sucesso!');
+        setView('list');
+      } else {
+        const error = await res.json();
+        alert(error.error || 'Erro ao atualizar senha');
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar senha:', error);
+    } finally {
+      setIsChangingPass(false);
     }
   };
 
@@ -668,6 +733,12 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
               onClick={() => { setView('condos'); setIsSidebarOpen(false); }}
             />
           )}
+          <NavItem 
+            icon={<UserIcon size={20} />} 
+            label="Meu Perfil" 
+            active={view === 'perfil'} 
+            onClick={() => { setView('perfil'); setIsSidebarOpen(false); }}
+          />
         </nav>
 
         <div className="mt-auto border-t border-slate-200 pt-4">
@@ -731,7 +802,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
         </header>
 
         {/* Content Area */}
-        <div className="mx-auto w-full max-w-6xl p-6 md:p-10">
+        <div className="mx-auto w-full max-w-6xl p-6 md:p-10 pb-24 md:pb-10">
           <AnimatePresence mode="wait">
             {view === 'list' ? (
               <motion.div 
@@ -750,18 +821,81 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                 </div>
 
                 {isMaster && Object.keys(stats.byCondo).length > 0 && (
-                  <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <h3 className="mb-4 text-lg font-bold flex items-center gap-2">
-                      <Building2 size={20} className="text-[#00a859]" />
-                      Chamados por Condomínio
-                    </h3>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                      {Object.entries(stats.byCondo).map(([condo, count]) => (
-                        <div key={condo} className="flex items-center justify-between rounded-lg bg-slate-50 p-3 border border-slate-100">
-                          <span className="text-sm font-medium text-slate-700 truncate mr-2">{condo}</span>
-                          <span className="rounded-full bg-[#00a859] px-2 py-0.5 text-[10px] font-bold text-white">{count}</span>
-                        </div>
-                      ))}
+                  <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                    {/* Pie Chart: Status Distribution */}
+                    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                      <div className="mb-6 flex items-center justify-between">
+                        <h3 className="text-lg font-bold flex items-center gap-2">
+                          <PieChartIcon size={20} className="text-[#00a859]" />
+                          Distribuição por Status
+                        </h3>
+                        <TrendingUp size={18} className="text-slate-400" />
+                      </div>
+                      <div className="h-[300px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={[
+                                { name: 'Pendentes', value: stats.pendentes },
+                                { name: 'Em Andamento', value: stats.emAndamento },
+                                { name: 'Concluídos', value: stats.concluidos },
+                              ]}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={60}
+                              outerRadius={80}
+                              paddingAngle={5}
+                              dataKey="value"
+                            >
+                              <Cell fill="#f59e0b" />
+                              <Cell fill="#6366f1" />
+                              <Cell fill="#10b981" />
+                            </Pie>
+                            <Tooltip 
+                              contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                            />
+                            <Legend verticalAlign="bottom" height={36}/>
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* Bar Chart: Top Condos */}
+                    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                      <div className="mb-6 flex items-center justify-between">
+                        <h3 className="text-lg font-bold flex items-center gap-2">
+                          <BarChart3 size={20} className="text-[#00a859]" />
+                          Chamados por Condomínio
+                        </h3>
+                        <Building2 size={18} className="text-slate-400" />
+                      </div>
+                      <div className="h-[300px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={Object.entries(stats.byCondo)
+                              .map(([name, value]) => ({ name, value }))
+                              .sort((a, b) => b.value - a.value)
+                              .slice(0, 5)}
+                            layout="vertical"
+                            margin={{ left: 40, right: 20 }}
+                          >
+                            <XAxis type="number" hide />
+                            <YAxis 
+                              dataKey="name" 
+                              type="category" 
+                              width={100} 
+                              axisLine={false}
+                              tickLine={false}
+                              style={{ fontSize: '10px', fontWeight: 'bold' }}
+                            />
+                            <Tooltip 
+                              cursor={{ fill: '#f8fafc' }}
+                              contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                            />
+                            <Bar dataKey="value" fill="#00a859" radius={[0, 4, 4, 0]} barSize={20} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -795,20 +929,32 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                 </div>
 
                 {/* Filter Bar */}
-                <div className="flex flex-wrap items-center gap-2">
-                  {['Todos', 'Pendente', 'Em Andamento', 'Concluído'].map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => setStatusFilter(s)}
-                      className={`rounded-full px-4 py-1.5 text-xs font-bold transition-all ${
-                        statusFilter === s 
-                          ? 'bg-[#00a859] text-white shadow-md' 
-                          : 'bg-white text-slate-600 border border-slate-200 hover:border-[#00a859] hover:text-[#00a859]'
-                      }`}
-                    >
-                      {s}
-                    </button>
-                  ))}
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {['Todos', 'Pendente', 'Em Andamento', 'Concluído'].map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setStatusFilter(s)}
+                        className={`rounded-full px-4 py-1.5 text-xs font-bold transition-all ${
+                          statusFilter === s 
+                            ? 'bg-[#00a859] text-white shadow-md' 
+                            : 'bg-white text-slate-600 border border-slate-200 hover:border-[#00a859] hover:text-[#00a859]'
+                        }`}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="relative w-full md:w-64">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                    <input 
+                      type="text"
+                      placeholder="Buscar por condomínio, bloco, apt..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full rounded-full border border-slate-200 bg-white py-2 pl-10 pr-4 text-xs focus:border-[#00a859] focus:ring-[#00a859] shadow-sm"
+                    />
+                  </div>
                 </div>
 
                 {loading ? (
@@ -1190,6 +1336,32 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                         </div>
                       </div>
 
+                      <div className="flex flex-col gap-3">
+                        <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Nível de Prioridade</label>
+                        <div className="grid grid-cols-3 gap-3">
+                          {(['Baixa', 'Média', 'Alta'] as Priority[]).map((p) => (
+                            <button
+                              key={p}
+                              type="button"
+                              onClick={() => setPrioridade(p)}
+                              disabled={isLocked}
+                              className={`flex flex-col items-center justify-center gap-1 rounded-lg border p-3 transition-all ${
+                                isLocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-slate-50'
+                              } ${
+                                prioridade === p 
+                                  ? p === 'Alta' ? 'border-red-500 bg-red-50 text-red-600' :
+                                    p === 'Média' ? 'border-blue-500 bg-blue-50 text-blue-600' :
+                                    'border-slate-500 bg-slate-50 text-slate-600'
+                                  : 'border-slate-200 bg-white text-slate-500'
+                              }`}
+                            >
+                              <ShieldAlert size={18} />
+                              <span className="text-xs font-bold uppercase">{p}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
                         <div className="flex items-center gap-2">
                           <input 
                             type="checkbox"
@@ -1423,6 +1595,75 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                 </AnimatePresence>
               </motion.div>
             )}
+
+            {view === 'perfil' && (
+              <motion.div
+                key="perfil"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-8 shadow-xl"
+              >
+                <div className="mb-8 text-center">
+                  <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-[#00a859]/10 text-[#00a859]">
+                    <UserIcon size={40} />
+                  </div>
+                  <h2 className="text-2xl font-bold text-slate-900">Meu Perfil</h2>
+                  <p className="text-slate-500">{user}</p>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="rounded-xl bg-slate-50 p-6 border border-slate-100">
+                    <h3 className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-500">Informações da Conta</h3>
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-500">Tipo de Acesso:</span>
+                        <span className="font-bold text-slate-900 uppercase">{isMaster ? 'Administrador Master' : 'Condomínio'}</span>
+                      </div>
+                      {!isMaster && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-500">Condomínio:</span>
+                          <span className="font-bold text-slate-900">{currentUserInfo?.condominio}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleUpdatePassword} className="space-y-4">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">Alterar Senha</h3>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold text-slate-500" htmlFor="newPass">Nova Senha</label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                        <input 
+                          type="password"
+                          id="newPass"
+                          placeholder="Digite sua nova senha"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          className="w-full rounded-lg border-slate-200 bg-white py-3 pl-10 text-slate-900 focus:border-[#00a859] focus:ring-[#00a859]"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <button 
+                      type="submit"
+                      disabled={isChangingPass}
+                      className="w-full rounded-lg bg-[#00a859] py-3 font-bold text-white transition-all hover:opacity-90 disabled:opacity-50"
+                    >
+                      {isChangingPass ? 'Atualizando...' : 'Salvar Nova Senha'}
+                    </button>
+                  </form>
+                </div>
+
+                <button 
+                  onClick={() => setView('list')}
+                  className="mt-8 w-full text-sm font-bold text-slate-400 hover:text-slate-600"
+                >
+                  Voltar para o Início
+                </button>
+              </motion.div>
+            )}
           </AnimatePresence>
 
           {/* Notification Toast */}
@@ -1488,6 +1729,54 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
             )}
           </AnimatePresence>
 
+          {/* Footer */}
+          <footer className="mt-auto border-t border-slate-200 bg-white py-6 text-center">
+            <p className="text-[10px] font-medium text-slate-400 uppercase tracking-widest">
+              Desenvolvido por Patrick Tomelin &copy; 2026
+            </p>
+          </footer>
+
+        </div>
+
+        {/* Mobile Bottom Nav */}
+        <div className="fixed bottom-0 left-0 right-0 z-[60] flex h-16 items-center justify-around border-t border-slate-200 bg-white px-2 md:hidden">
+          <button 
+            onClick={() => setView('list')}
+            className={`flex flex-col items-center gap-1 ${view === 'list' ? 'text-[#00a859]' : 'text-slate-400'}`}
+          >
+            <Home size={20} />
+            <span className="text-[10px] font-bold">Início</span>
+          </button>
+          <button 
+            onClick={() => handleCreate()}
+            className={`flex flex-col items-center gap-1 ${view === 'create' ? 'text-[#00a859]' : 'text-slate-400'}`}
+          >
+            <Ticket size={20} />
+            <span className="text-[10px] font-bold">Novo</span>
+          </button>
+          <button 
+            onClick={() => setView('history')}
+            className={`flex flex-col items-center gap-1 ${view === 'history' ? 'text-[#00a859]' : 'text-slate-400'}`}
+          >
+            <History size={20} />
+            <span className="text-[10px] font-bold">Histórico</span>
+          </button>
+          {isMaster && (
+            <button 
+              onClick={() => setView('condos')}
+              className={`flex flex-col items-center gap-1 ${view === 'condos' ? 'text-[#00a859]' : 'text-slate-400'}`}
+            >
+              <Users size={20} />
+              <span className="text-[10px] font-bold">Condos</span>
+            </button>
+          )}
+          <button 
+            onClick={() => setView('perfil')}
+            className={`flex flex-col items-center gap-1 ${view === 'perfil' ? 'text-[#00a859]' : 'text-slate-400'}`}
+          >
+            <UserIcon size={20} />
+            <span className="text-[10px] font-bold">Perfil</span>
+          </button>
         </div>
       </main>
     </div>
@@ -1546,6 +1835,12 @@ function ChamadoCard({ chamado, onEdit, onDelete, onImageClick, showCondo, isMas
     'Concluído': 'bg-green-100 text-green-700 border-green-200'
   };
 
+  const priorityColors = {
+    'Baixa': 'bg-slate-100 text-slate-600 border-slate-200',
+    'Média': 'bg-blue-50 text-blue-600 border-blue-100',
+    'Alta': 'bg-red-50 text-red-600 border-red-100'
+  };
+
   const icons = {
     'interfone': <Phone size={16} />,
     'tv': <Tv size={16} />,
@@ -1554,27 +1849,58 @@ function ChamadoCard({ chamado, onEdit, onDelete, onImageClick, showCondo, isMas
 
   const isLocked = !isMaster && chamado.status === 'Concluído';
 
+  // SLA Calculation
+  const getSLA = () => {
+    const start = new Date(chamado.createdAt).getTime();
+    const now = new Date().getTime();
+    const diff = now - start;
+    
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) return `Aberto há ${days} ${days === 1 ? 'dia' : 'dias'}`;
+    if (hours > 0) return `Aberto há ${hours} ${hours === 1 ? 'hora' : 'horas'}`;
+    const minutes = Math.floor(diff / (1000 * 60));
+    return `Aberto há ${minutes} ${minutes === 1 ? 'minuto' : 'minutos'}`;
+  };
+
   return (
-    <div className="group flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:shadow-md">
+    <div 
+      onClick={onEdit}
+      className="group flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:shadow-md cursor-pointer hover:border-[#00a859]/30"
+    >
       <div className="mb-4 flex items-start justify-between">
-        <div className="flex flex-col gap-1">
-          <div className={`flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider w-fit ${statusColors[chamado.status]}`}>
-            {chamado.status === 'Pendente' && <Clock size={10} />}
-            {chamado.status === 'Em Andamento' && <AlertCircle size={10} />}
-            {chamado.status === 'Concluído' && <CheckCircle2 size={10} />}
-            {chamado.status}
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <div className={`flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider w-fit ${statusColors[chamado.status]}`}>
+              {chamado.status === 'Pendente' && <Clock size={10} />}
+              {chamado.status === 'Em Andamento' && <AlertCircle size={10} />}
+              {chamado.status === 'Concluído' && <CheckCircle2 size={10} />}
+              {chamado.status}
+            </div>
+            <div className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider w-fit ${priorityColors[chamado.prioridade || 'Média']}`}>
+              {chamado.prioridade || 'Média'}
+            </div>
           </div>
           <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400">
             <Calendar size={10} />
             {new Date(chamado.createdAt).toLocaleDateString('pt-BR')}
+            <span className="mx-1">•</span>
+            <span className={chamado.status !== 'Concluído' ? 'text-amber-600' : ''}>{chamado.status === 'Concluído' ? 'Finalizado' : getSLA()}</span>
           </div>
         </div>
         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={onEdit} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-[#00a859]">
+          <button 
+            onClick={(e) => { e.stopPropagation(); onEdit(); }} 
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-[#00a859]"
+          >
             {isLocked ? <Eye size={16} /> : <Edit3 size={16} />}
           </button>
           {isMaster && (
-            <button onClick={onDelete} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-red-500">
+            <button 
+              onClick={(e) => { e.stopPropagation(); onDelete(); }} 
+              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-red-500"
+            >
               <Trash2 size={16} />
             </button>
           )}
@@ -1596,7 +1922,10 @@ function ChamadoCard({ chamado, onEdit, onDelete, onImageClick, showCondo, isMas
       {(chamado.imageUrl || chamado.resolutionImageUrl) && (
         <div className="mb-4 flex gap-2">
           {chamado.imageUrl && (
-            <div className="relative h-12 w-12 overflow-hidden rounded-lg border border-slate-100 bg-slate-50 cursor-pointer" onClick={() => onImageClick(chamado.imageUrl!)}>
+            <div 
+              className="relative h-12 w-12 overflow-hidden rounded-lg border border-slate-100 bg-slate-50 cursor-pointer" 
+              onClick={(e) => { e.stopPropagation(); onImageClick(chamado.imageUrl!); }}
+            >
               <img src={chamado.imageUrl} alt="Problema" className="h-full w-full object-cover" />
               <div className="absolute inset-0 flex items-center justify-center bg-black/10">
                 <Paperclip size={10} className="text-white" />
@@ -1604,7 +1933,10 @@ function ChamadoCard({ chamado, onEdit, onDelete, onImageClick, showCondo, isMas
             </div>
           )}
           {chamado.resolutionImageUrl && (
-            <div className="relative h-12 w-12 overflow-hidden rounded-lg border border-emerald-100 bg-emerald-50 cursor-pointer" onClick={() => onImageClick(chamado.resolutionImageUrl!)}>
+            <div 
+              className="relative h-12 w-12 overflow-hidden rounded-lg border border-emerald-100 bg-emerald-50 cursor-pointer" 
+              onClick={(e) => { e.stopPropagation(); onImageClick(chamado.resolutionImageUrl!); }}
+            >
               <img src={chamado.resolutionImageUrl} alt="Resolução" className="h-full w-full object-cover" />
               <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/20">
                 <CheckCircle2 size={10} className="text-emerald-600" />

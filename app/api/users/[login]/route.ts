@@ -29,3 +29,32 @@ export async function DELETE(
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ login: string }> }
+) {
+  try {
+    const { login } = await params;
+    const data = await request.json();
+    const supabase = getSupabaseAdmin();
+
+    const updateData: any = {};
+    if (data.pass) updateData.pass = data.pass;
+    if (data.condominio) updateData.condominio = data.condominio;
+
+    const { data: updated, error } = await supabase
+      .from('users')
+      .update(updateData)
+      .eq('login', login)
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (!updated) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 });
+
+    return NextResponse.json(updated);
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}

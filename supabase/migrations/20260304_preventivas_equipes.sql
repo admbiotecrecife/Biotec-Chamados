@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS equipes (
     nome_equipe TEXT NOT NULL, -- Ex: "Victor", "Aldiclei & Sérgio"
     tecnico_principal TEXT NOT NULL,
     ajudante TEXT,
+    funcao TEXT, -- Ex: "Técnico", "Dono", "Gerente"
     local_atual TEXT, -- Nome do condomínio ou "Base"
     status TEXT DEFAULT 'Disponível', -- 'Disponível', 'Em Atendimento', 'Emergência', 'Deslocamento'
     ultima_atualizacao TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -23,8 +24,10 @@ CREATE TABLE IF NOT EXISTS preventivas (
 );
 
 -- Inserir as equipes iniciais
-INSERT INTO equipes (nome_equipe, tecnico_principal, ajudante) 
+INSERT INTO equipes (nome_equipe, tecnico_principal, ajudante, funcao) 
 VALUES 
-('Victor', 'Victor', NULL),
-('Aldiclei & Sérgio', 'Aldiclei', 'Sérgio')
+('Victor', 'Victor', NULL, 'Técnico'),
+('Aldiclei & Sérgio', 'Aldiclei', 'Sérgio', 'Técnico'),
+('Wandell & Gabriel', 'Wandell', 'Gabriel', 'Dono / Técnico'),
+('Patrick', 'Patrick', NULL, 'Gerente')
 ON CONFLICT DO NOTHING;

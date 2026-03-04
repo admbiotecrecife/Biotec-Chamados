@@ -45,3 +45,20 @@ export async function PUT(req: Request) {
     return Response.json({ error: error.message }, { status: 500 });
   }
 }
+
+export async function POST(req: Request) {
+  try {
+    const supabase = getSupabase();
+    const body = await req.json();
+    
+    const { data, error } = await supabase
+      .from('equipes')
+      .insert([body])
+      .select();
+
+    if (error) throw error;
+    return Response.json(data[0]);
+  } catch (error: any) {
+    return Response.json({ error: error.message }, { status: 500 });
+  }
+}

@@ -95,6 +95,7 @@ interface Equipe {
   nome_equipe: string;
   tecnico_principal: string;
   ajudante?: string;
+  funcao?: string;
   local_atual?: string;
   status: string;
   ultima_atualizacao: string;
@@ -191,7 +192,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     localStorage.setItem(`biotec_view_${user}`, newView);
   };
 
-  const fetchChamados = async (isSilent = false) => {
+  const fetchChamados = React.useCallback(async (isSilent = false) => {
     if (!isSilent) setLoading(true);
     try {
       const res = await fetch('/api/chamados');
@@ -226,8 +227,6 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
               icon: '/favicon.ico'
             });
           }
-          
-          // Sound alert (optional, but let's stick to visual first)
         }
       }
 
@@ -241,9 +240,9 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     } finally {
       if (!isSilent) setLoading(false);
     }
-  };
+  }, [isMaster, lastTicketId, user]);
 
-  const fetchEquipes = async () => {
+  const fetchEquipes = React.useCallback(async () => {
     try {
       const res = await fetch('/api/equipes');
       const data = await res.json();
@@ -252,9 +251,9 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     } catch (error) {
       console.error('Erro ao buscar equipes:', error);
     }
-  };
+  }, []);
 
-  const fetchPreventivas = async (condo = 'all') => {
+  const fetchPreventivas = React.useCallback(async (condo = 'all') => {
     try {
       const res = await fetch(`/api/preventivas?condo=${condo}`);
       const data = await res.json();
@@ -263,7 +262,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     } catch (error) {
       console.error('Erro ao buscar preventivas:', error);
     }
-  };
+  }, []);
 
   const handleDispatch = async (equipeId: string) => {
     try {
@@ -430,7 +429,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     init();
 
     return () => clearInterval(pollInterval);
-  }, [isMaster, user]);
+  }, [isMaster, user, fetchChamados, fetchEquipes, fetchPreventivas]);
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1068,7 +1067,12 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                             </div>
                             <div>
                               <h4 className="font-bold text-slate-900">{equipe.nome_equipe}</h4>
-                              <p className="text-[10px] text-slate-500 uppercase font-bold">
+                              {equipe.funcao && (
+                                <span className="text-[8px] font-bold uppercase tracking-wider text-[#00a859] bg-[#00a859]/10 px-1.5 py-0.5 rounded-full">
+                                  {equipe.funcao}
+                                </span>
+                              )}
+                              <p className="text-[10px] text-slate-500 uppercase font-bold mt-0.5">
                                 {equipe.ajudante ? `Técnico: ${equipe.tecnico_principal} + ${equipe.ajudante}` : `Técnico: ${equipe.tecnico_principal}`}
                               </p>
                             </div>
@@ -1639,6 +1643,11 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                       </div>
                       
                       <h3 className="text-lg font-bold text-slate-900">{equipe.nome_equipe}</h3>
+                      {equipe.funcao && (
+                        <span className="mb-2 inline-block text-[10px] font-bold uppercase tracking-wider text-[#00a859] bg-[#00a859]/10 px-2 py-0.5 rounded-full">
+                          {equipe.funcao}
+                        </span>
+                      )}
                       <p className="mb-4 text-sm text-slate-500">
                         {equipe.ajudante ? `Técnico: ${equipe.tecnico_principal} + ${equipe.ajudante}` : `Técnico: ${equipe.tecnico_principal}`}
                       </p>
@@ -2340,10 +2349,12 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                   <X size={32} />
                 </button>
                 <div className="relative h-full w-full max-w-4xl" onClick={(e) => e.stopPropagation()}>
-                  <img 
+                  <Image 
                     src={selectedImage} 
                     alt="Visualização" 
-                    className="h-full w-full object-contain" 
+                    fill
+                    className="object-contain" 
+                    referrerPolicy="no-referrer"
                   />
                 </div>
               </motion.div>
@@ -2556,7 +2567,7 @@ function ChamadoCard({ chamado, onEdit, onDelete, onImageClick, showCondo, isMas
               className="relative h-12 w-12 overflow-hidden rounded-lg border border-slate-100 bg-slate-50 cursor-pointer" 
               onClick={(e) => { e.stopPropagation(); onImageClick(chamado.imageUrl!); }}
             >
-              <img src={chamado.imageUrl} alt="Problema" className="h-full w-full object-cover" />
+              <Image src={chamado.imageUrl} alt="Problema" fill className="object-cover" referrerPolicy="no-referrer" />
               <div className="absolute inset-0 flex items-center justify-center bg-black/10">
                 <Paperclip size={10} className="text-white" />
               </div>
@@ -2567,7 +2578,7 @@ function ChamadoCard({ chamado, onEdit, onDelete, onImageClick, showCondo, isMas
               className="relative h-12 w-12 overflow-hidden rounded-lg border border-emerald-100 bg-emerald-50 cursor-pointer" 
               onClick={(e) => { e.stopPropagation(); onImageClick(chamado.resolutionImageUrl!); }}
             >
-              <img src={chamado.resolutionImageUrl} alt="Resolução" className="h-full w-full object-cover" />
+              <Image src={chamado.resolutionImageUrl} alt="Resolução" fill className="object-cover" referrerPolicy="no-referrer" />
               <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/20">
                 <CheckCircle2 size={10} className="text-emerald-600" />
               </div>

@@ -63,7 +63,7 @@ import autoTable from 'jspdf-autotable';
 
 type ProblemType = 'interfone' | 'tv' | 'outro' | null;
 type Priority = 'Baixa' | 'Média' | 'Alta';
-type View = 'list' | 'create' | 'edit' | 'history' | 'condos' | 'perfil' | 'dashboard';
+type View = 'list' | 'create' | 'edit' | 'history' | 'condos' | 'perfil' | 'dashboard' | 'preventivas' | 'equipes';
 
 interface User {
   login: string;
@@ -88,6 +88,28 @@ interface Chamado {
   resolutionImageUrl?: string;
   feedbackRating?: number;
   feedbackComment?: string;
+}
+
+interface Equipe {
+  id: string;
+  nome_equipe: string;
+  tecnico_principal: string;
+  ajudante?: string;
+  local_atual?: string;
+  status: string;
+  ultima_atualizacao: string;
+}
+
+interface Preventiva {
+  id: string;
+  condominio: string;
+  data_visita: string;
+  tecnico_responsavel: string;
+  equipe_id?: string;
+  itens_verificados: string[];
+  observacoes?: string;
+  proxima_visita?: string;
+  created_at: string;
 }
 
 interface BiotecAppProps {
@@ -145,6 +167,22 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
 
   const [feedbackRating, setFeedbackRating] = React.useState<number>(0);
   const [feedbackComment, setFeedbackComment] = React.useState('');
+
+  // Equipes & Preventivas State
+  const [equipes, setEquipes] = React.useState<Equipe[]>([]);
+  const [preventivas, setPreventivas] = React.useState<Preventiva[]>([]);
+  const [isDispatching, setIsDispatching] = React.useState<string | null>(null); // ID da equipe sendo despachada
+  const [dispatchLocal, setDispatchLocal] = React.useState('');
+  const [dispatchStatus, setDispatchStatus] = React.useState('Em Atendimento');
+
+  // Preventive Form State
+  const [prevCondo, setPrevCondo] = React.useState('');
+  const [prevTecnico, setPrevTecnico] = React.useState('');
+  const [prevEquipeId, setPrevEquipeId] = React.useState('');
+  const [prevItens, setPrevItens] = React.useState<string[]>([]);
+  const [prevObs, setPrevObs] = React.useState('');
+  const [prevProxima, setPrevProxima] = React.useState('');
+  const [isCreatingPrev, setIsCreatingPrev] = React.useState(false);
 
   const isLocked = !isMaster && view === 'edit' && status === 'Concluído';
 
@@ -205,6 +243,133 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     }
   };
 
+  const fetchEquipes = async () => {
+    try {
+      const res = await fetch('/api/equipes');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao buscar equipes');
+      setEquipes(data);
+    } catch (error) {
+      console.error('Erro ao buscar equipes:', error);
+    }
+  };
+
+  const fetchPreventivas = async (condo = 'all') => {
+    try {
+      const res = await fetch(`/api/preventivas?condo=${condo}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao buscar preventivas');
+      setPreventivas(data);
+    } catch (error) {
+      console.error('Erro ao buscar preventivas:', error);
+    }
+  };
+
+  const handleDispatch = async (equipeId: string) => {
+    try {
+      const res = await fetch('/api/equipes', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: equipeId,
+          local_atual: dispatchLocal,
+          status: dispatchStatus
+        })
+      });
+      if (!res.ok) throw new Error('Erro ao despachar equipe');
+      setIsDispatching(null);
+      setDispatchLocal('');
+      fetchEquipes();
+    } catch (error) {
+      console.error('Erro ao despachar:', error);
+      alert('Erro ao atualizar status da equipe');
+    }
+  };
+
+  const handleCreatePreventiva = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!prevCondo || !prevTecnico) {
+      alert('Por favor, preencha o condomínio e o técnico responsável.');
+      return;
+    }
+
+    setIsCreatingPrev(true);
+    try {
+      const res = await fetch('/api/preventivas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          condominio: prevCondo,
+          tecnico_responsavel: prevTecnico,
+          equipe_id: prevEquipeId || null,
+          itens_verificados: prevItens,
+          observacoes: prevObs,
+          proxima_visita: prevProxima || null
+        })
+      });
+
+      if (!res.ok) throw new Error('Erro ao salvar preventiva');
+      
+      alert('Manutenção preventiva registrada com sucesso!');
+      setPrevCondo('');
+      setPrevTecnico('');
+      setPrevEquipeId('');
+      setPrevItens([]);
+      setPrevObs('');
+      setPrevProxima('');
+      fetchPreventivas();
+    } catch (error) {
+      console.error('Erro ao criar preventiva:', error);
+      alert('Erro ao registrar manutenção.');
+    } finally {
+      setIsCreatingPrev(false);
+    }
+  };
+
+  const togglePrevItem = (item: string) => {
+    setPrevItens(prev => 
+      prev.includes(item) ? prev.filter(i => i !== item) : [...prev, item]
+    );
+  };
+
+  const exportPreventivaPDF = (p: Preventiva) => {
+    const doc = new jsPDF();
+    
+    // Header
+    doc.setFillColor(0, 168, 89);
+    doc.rect(0, 0, 210, 40, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.text('BIOTEC - RELATÓRIO DE PREVENTIVA', 105, 25, { align: 'center' });
+    
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(12);
+    doc.text(`Condomínio: ${p.condominio}`, 20, 50);
+    doc.text(`Data da Visita: ${new Date(p.data_visita).toLocaleDateString('pt-BR')}`, 20, 60);
+    doc.text(`Técnico Responsável: ${p.tecnico_responsavel}`, 20, 70);
+    
+    autoTable(doc, {
+      startY: 80,
+      head: [['Item Verificado', 'Status']],
+      body: p.itens_verificados.map(item => [item, 'OK / Verificado']),
+      theme: 'striped',
+      headStyles: { fillColor: [0, 168, 89] }
+    });
+    
+    const finalY = (doc as any).lastAutoTable.finalY || 80;
+    doc.text('Observações:', 20, finalY + 20);
+    doc.setFontSize(10);
+    doc.text(p.observacoes || 'Nenhuma observação registrada.', 20, finalY + 30, { maxWidth: 170 });
+    
+    if (p.proxima_visita) {
+      doc.setFontSize(12);
+      doc.setTextColor(0, 168, 89);
+      doc.text(`Próxima Visita Agendada: ${new Date(p.proxima_visita).toLocaleDateString('pt-BR')}`, 20, finalY + 50);
+    }
+    
+    doc.save(`Preventiva_${p.condominio}_${new Date(p.data_visita).toLocaleDateString('pt-BR')}.pdf`);
+  };
+
   const fetchUsers = async () => {
     try {
       const res = await fetch('/api/users');
@@ -227,6 +392,10 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     setIsInitialized(true);
 
     fetchChamados();
+    if (isMaster) {
+      fetchEquipes();
+      fetchPreventivas();
+    }
     
     // Request notification permission
     if (isMaster && 'Notification' in window && Notification.permission === 'default') {
@@ -743,12 +912,26 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
             onClick={() => { handleSetView('list'); setIsSidebarOpen(false); }}
           />
           {isMaster && (
-            <NavItem 
-              icon={<TrendingUp size={20} />} 
-              label="Dashboard" 
-              active={view === 'dashboard'} 
-              onClick={() => { handleSetView('dashboard'); setIsSidebarOpen(false); }}
-            />
+            <>
+              <NavItem 
+                icon={<TrendingUp size={20} />} 
+                label="Dashboard" 
+                active={view === 'dashboard'} 
+                onClick={() => { handleSetView('dashboard'); setIsSidebarOpen(false); }}
+              />
+              <NavItem 
+                icon={<RefreshCw size={20} />} 
+                label="Gestão de Equipes" 
+                active={view === 'equipes'} 
+                onClick={() => { handleSetView('equipes'); setIsSidebarOpen(false); }}
+              />
+              <NavItem 
+                icon={<Calendar size={20} />} 
+                label="Manut. Preventiva" 
+                active={view === 'preventivas'} 
+                onClick={() => { handleSetView('preventivas'); setIsSidebarOpen(false); }}
+              />
+            </>
           )}
           <NavItem 
             icon={<Ticket size={20} />} 
@@ -824,6 +1007,8 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                view === 'create' ? 'Novo Chamado' : 
                view === 'history' ? 'Histórico e Relatórios' : 
                view === 'condos' ? 'Gerenciar Condomínios' : 
+               view === 'equipes' ? 'Gestão de Equipes' :
+               view === 'preventivas' ? 'Manutenções Preventivas' :
                view === 'perfil' ? 'Meu Perfil' : 'Editar Chamado'}
             </h1>
           </div>
@@ -858,6 +1043,115 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                   <StatCard label="Em Andamento" value={stats.emAndamento} icon={<AlertCircle className="text-indigo-500" />} />
                   <StatCard label="Concluídos" value={stats.concluidos} icon={<CheckCircle2 className="text-green-500" />} />
                 </div>
+
+                {/* Painel de Equipes em Tempo Real */}
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <div className="mb-6 flex items-center justify-between">
+                    <h3 className="text-lg font-bold flex items-center gap-2">
+                      <Users size={20} className="text-[#00a859]" />
+                      Status das Equipes (Hoje)
+                    </h3>
+                    <button 
+                      onClick={() => fetchEquipes()}
+                      className="text-slate-400 hover:text-[#00a859] transition-colors"
+                    >
+                      <RefreshCw size={18} />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {equipes.map((equipe) => (
+                      <div key={equipe.id} className="flex flex-col gap-4 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm text-[#00a859]">
+                              <UserIcon size={20} />
+                            </div>
+                            <div>
+                              <h4 className="font-bold text-slate-900">{equipe.nome_equipe}</h4>
+                              <p className="text-[10px] text-slate-500 uppercase font-bold">
+                                {equipe.ajudante ? `Técnico: ${equipe.tecnico_principal} + ${equipe.ajudante}` : `Técnico: ${equipe.tecnico_principal}`}
+                              </p>
+                            </div>
+                          </div>
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                            equipe.status === 'Disponível' ? 'bg-green-100 text-green-700' :
+                            equipe.status === 'Emergência' ? 'bg-red-100 text-red-700 animate-pulse' :
+                            'bg-blue-100 text-blue-700'
+                          }`}>
+                            {equipe.status}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <Building2 size={14} className="text-slate-400" />
+                          <span className="font-medium text-slate-700">Local: {equipe.local_atual || 'Base / Deslocamento'}</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => setIsDispatching(equipe.id)}
+                            className="flex-1 rounded-lg bg-white border border-slate-200 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-all"
+                          >
+                            Direcionar Equipe
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Modal de Despacho */}
+                {isDispatching && (
+                  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+                    >
+                      <div className="mb-4 flex items-center justify-between">
+                        <h3 className="text-lg font-bold">Direcionar Equipe</h3>
+                        <button onClick={() => setIsDispatching(null)} className="text-slate-400 hover:text-slate-600">
+                          <X size={20} />
+                        </button>
+                      </div>
+                      <div className="space-y-4">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold uppercase text-slate-500">Condomínio de Destino</label>
+                          <select 
+                            value={dispatchLocal}
+                            onChange={(e) => setDispatchLocal(e.target.value)}
+                            className="w-full rounded-lg border-slate-200 bg-slate-50 py-2 text-sm"
+                          >
+                            <option value="">Selecione o Condomínio</option>
+                            <option value="Base / Central">Base / Central</option>
+                            <option value="Emergência Geral">Emergência Geral</option>
+                            {users.filter(u => u.role === 'condo').map(u => (
+                              <option key={u.login} value={u.condominio}>{u.condominio}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold uppercase text-slate-500">Status da Missão</label>
+                          <select 
+                            value={dispatchStatus}
+                            onChange={(e) => setDispatchStatus(e.target.value)}
+                            className="w-full rounded-lg border-slate-200 bg-slate-50 py-2 text-sm"
+                          >
+                            <option value="Em Atendimento">Em Atendimento</option>
+                            <option value="Emergência">Emergência</option>
+                            <option value="Preventiva">Preventiva</option>
+                            <option value="Deslocamento">Deslocamento</option>
+                            <option value="Disponível">Disponível (Base)</option>
+                          </select>
+                        </div>
+                        <button 
+                          onClick={() => handleDispatch(isDispatching)}
+                          className="w-full rounded-lg bg-[#00a859] py-3 font-bold text-white hover:opacity-90 transition-all"
+                        >
+                          Confirmar Direcionamento
+                        </button>
+                      </div>
+                    </motion.div>
+                  </div>
+                )}
 
                 {Object.keys(stats.byCondo).length > 0 && (
                   <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -1310,6 +1604,212 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                                 </td>
                               </tr>
                             ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            ) : view === 'equipes' && isMaster ? (
+              <motion.div
+                key="equipes"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="space-y-6"
+              >
+                <div className="flex flex-col gap-2">
+                  <h2 className="text-2xl font-bold">Gestão de Equipes</h2>
+                  <p className="text-slate-500">Monitore e gerencie o status dos técnicos em tempo real.</p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                  {equipes.map((equipe) => (
+                    <div key={equipe.id} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                      <div className="mb-4 flex items-center justify-between">
+                        <div className={`h-3 w-3 rounded-full ${
+                          equipe.status === 'Disponível' ? 'bg-green-500' :
+                          equipe.status === 'Emergência' ? 'bg-red-500 animate-pulse' :
+                          'bg-blue-500'
+                        }`} />
+                        <span className="text-[10px] font-bold uppercase text-slate-400">
+                          Atualizado: {new Date(equipe.ultima_atualizacao).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      
+                      <h3 className="text-lg font-bold text-slate-900">{equipe.nome_equipe}</h3>
+                      <p className="mb-4 text-sm text-slate-500">
+                        {equipe.ajudante ? `Técnico: ${equipe.tecnico_principal} + ${equipe.ajudante}` : `Técnico: ${equipe.tecnico_principal}`}
+                      </p>
+
+                      <div className="space-y-3 rounded-xl bg-slate-50 p-4">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-500">Status Atual:</span>
+                          <span className="font-bold text-slate-900">{equipe.status}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-500">Localização:</span>
+                          <span className="font-bold text-slate-900 truncate max-w-[120px]">{equipe.local_atual || 'Base'}</span>
+                        </div>
+                      </div>
+
+                      <button 
+                        onClick={() => setIsDispatching(equipe.id)}
+                        className="mt-6 w-full rounded-lg border border-slate-200 bg-white py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all"
+                      >
+                        Mudar Status / Local
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            ) : view === 'preventivas' && isMaster ? (
+              <motion.div
+                key="preventivas"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="space-y-8"
+              >
+                <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+                  {/* Form de Registro */}
+                  <div className="lg:col-span-1">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                      <h3 className="mb-6 flex items-center gap-2 text-lg font-bold">
+                        <Calendar size={20} className="text-[#00a859]" />
+                        Registrar Preventiva
+                      </h3>
+                      <form onSubmit={handleCreatePreventiva} className="space-y-4">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold uppercase text-slate-500">Condomínio</label>
+                          <select 
+                            value={prevCondo}
+                            onChange={(e) => setPrevCondo(e.target.value)}
+                            className="w-full rounded-lg border-slate-200 bg-slate-50 py-2 text-sm"
+                            required
+                          >
+                            <option value="">Selecione o Condomínio</option>
+                            {users.filter(u => u.role === 'condo').map(u => (
+                              <option key={u.login} value={u.condominio}>{u.condominio}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold uppercase text-slate-500">Técnico / Equipe</label>
+                          <select 
+                            value={prevTecnico}
+                            onChange={(e) => setPrevTecnico(e.target.value)}
+                            className="w-full rounded-lg border-slate-200 bg-slate-50 py-2 text-sm"
+                            required
+                          >
+                            <option value="">Selecione o Responsável</option>
+                            {equipes.map(eq => (
+                              <option key={eq.id} value={eq.nome_equipe}>{eq.nome_equipe}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                          <label className="text-[10px] font-bold uppercase text-slate-500">Itens Verificados</label>
+                          <div className="grid grid-cols-1 gap-2">
+                            {['Interfonia', 'Sinal de TV', 'Cabeamento', 'Central de Portaria', 'Câmeras / CFTV'].map(item => (
+                              <label key={item} className="flex items-center gap-2 text-xs cursor-pointer">
+                                <input 
+                                  type="checkbox" 
+                                  checked={prevItens.includes(item)}
+                                  onChange={() => togglePrevItem(item)}
+                                  className="rounded text-[#00a859]"
+                                />
+                                {item}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold uppercase text-slate-500">Próxima Visita (Opcional)</label>
+                          <input 
+                            type="date"
+                            value={prevProxima}
+                            onChange={(e) => setPrevProxima(e.target.value)}
+                            className="w-full rounded-lg border-slate-200 bg-slate-50 py-2 text-sm"
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold uppercase text-slate-500">Observações</label>
+                          <textarea 
+                            value={prevObs}
+                            onChange={(e) => setPrevObs(e.target.value)}
+                            rows={3}
+                            className="w-full rounded-lg border-slate-200 bg-slate-50 py-2 px-3 text-sm"
+                            placeholder="Descreva detalhes da manutenção..."
+                          />
+                        </div>
+
+                        <button 
+                          type="submit"
+                          disabled={isCreatingPrev}
+                          className="w-full rounded-lg bg-[#00a859] py-3 font-bold text-white hover:opacity-90 transition-all disabled:opacity-50"
+                        >
+                          {isCreatingPrev ? 'Salvando...' : 'Registrar Manutenção'}
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+
+                  {/* Lista de Preventivas Realizadas */}
+                  <div className="lg:col-span-2">
+                    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                      <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+                        <h3 className="font-bold text-slate-900">Histórico de Preventivas</h3>
+                        <select 
+                          onChange={(e) => fetchPreventivas(e.target.value)}
+                          className="rounded-lg border-slate-200 bg-white py-1 px-3 text-xs"
+                        >
+                          <option value="all">Todos os Condomínios</option>
+                          {users.filter(u => u.role === 'condo').map(u => (
+                            <option key={u.login} value={u.condominio}>{u.condominio}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                          <thead className="bg-slate-50 text-[10px] font-bold uppercase text-slate-500">
+                            <tr>
+                              <th className="px-6 py-4">Data</th>
+                              <th className="px-6 py-4">Condomínio</th>
+                              <th className="px-6 py-4">Técnico</th>
+                              <th className="px-6 py-4 text-right">Relatório</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {preventivas.length === 0 ? (
+                              <tr>
+                                <td colSpan={4} className="px-6 py-12 text-center text-slate-500">Nenhuma preventiva registrada.</td>
+                              </tr>
+                            ) : (
+                              preventivas.map(p => (
+                                <tr key={p.id} className="hover:bg-slate-50 transition-colors">
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    {new Date(p.data_visita).toLocaleDateString('pt-BR')}
+                                  </td>
+                                  <td className="px-6 py-4 font-bold text-slate-900">{p.condominio}</td>
+                                  <td className="px-6 py-4 text-slate-600">{p.tecnico_responsavel}</td>
+                                  <td className="px-6 py-4 text-right">
+                                    <button 
+                                      onClick={() => exportPreventivaPDF(p)}
+                                      className="inline-flex items-center gap-1 text-[#00a859] hover:underline font-bold"
+                                    >
+                                      <Download size={14} />
+                                      PDF
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
                           </tbody>
                         </table>
                       </div>

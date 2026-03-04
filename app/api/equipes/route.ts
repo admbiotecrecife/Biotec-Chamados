@@ -62,3 +62,23 @@ export async function POST(req: Request) {
     return Response.json({ error: error.message }, { status: 500 });
   }
 }
+
+export async function DELETE(req: Request) {
+  try {
+    const supabase = getSupabase();
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+    
+    if (!id) return Response.json({ error: 'ID da equipe é obrigatório' }, { status: 400 });
+
+    const { error } = await supabase
+      .from('equipes')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    return Response.json({ success: true });
+  } catch (error: any) {
+    return Response.json({ error: error.message }, { status: 500 });
+  }
+}

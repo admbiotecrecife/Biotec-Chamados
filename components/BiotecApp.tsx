@@ -119,7 +119,7 @@ interface BiotecAppProps {
 }
 
 export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
-  const isMaster = user.toLowerCase() === 'admin@biotec.com';
+  const isMaster = user.toLowerCase() === 'admin@biotec.com' || user.toLowerCase() === 'admbiotecrecife@gmail.com';
   const [view, setView] = React.useState<View>('list');
   const [isInitialized, setIsInitialized] = React.useState(false);
   const [chamados, setChamados] = React.useState<Chamado[]>([]);
@@ -175,6 +175,12 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
   const [isDispatching, setIsDispatching] = React.useState<string | null>(null); // ID da equipe sendo despachada
   const [dispatchLocal, setDispatchLocal] = React.useState('');
   const [dispatchStatus, setDispatchStatus] = React.useState('Em Atendimento');
+
+  const [isAddingEquipe, setIsAddingEquipe] = React.useState(false);
+  const [newEquipeNome, setNewEquipeNome] = React.useState('');
+  const [newEquipeTecnico, setNewEquipeTecnico] = React.useState('');
+  const [newEquipeAjudante, setNewEquipeAjudante] = React.useState('');
+  const [newEquipeFuncao, setNewEquipeFuncao] = React.useState('Técnico');
 
   // Preventive Form State
   const [prevCondo, setPrevCondo] = React.useState('');
@@ -263,6 +269,46 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
       console.error('Erro ao buscar preventivas:', error);
     }
   }, []);
+
+  const handleCreateEquipe = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/equipes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nome_equipe: newEquipeNome,
+          tecnico_principal: newEquipeTecnico,
+          ajudante: newEquipeAjudante || null,
+          funcao: newEquipeFuncao,
+          status: 'Disponível',
+          local_atual: 'Base',
+          ultima_atualizacao: new Date().toISOString()
+        })
+      });
+      if (!res.ok) throw new Error('Erro ao criar equipe');
+      setIsAddingEquipe(false);
+      setNewEquipeNome('');
+      setNewEquipeTecnico('');
+      setNewEquipeAjudante('');
+      fetchEquipes();
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao criar equipe');
+    }
+  };
+
+  const handleDeleteEquipe = async (id: string) => {
+    if (!confirm('Tem certeza que deseja remover esta equipe?')) return;
+    try {
+      const res = await fetch(`/api/equipes?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Erro ao remover equipe');
+      fetchEquipes();
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao remover equipe');
+    }
+  };
 
   const handleDispatch = async (equipeId: string) => {
     try {
@@ -1157,6 +1203,78 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                   </div>
                 )}
 
+                {/* Modal de Adicionar Equipe */}
+                {isAddingEquipe && (
+                  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+                    >
+                      <div className="mb-4 flex items-center justify-between">
+                        <h3 className="text-lg font-bold">Cadastrar Nova Equipe</h3>
+                        <button onClick={() => setIsAddingEquipe(false)} className="text-slate-400 hover:text-slate-600">
+                          <X size={20} />
+                        </button>
+                      </div>
+                      <form onSubmit={handleCreateEquipe} className="space-y-4">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold uppercase text-slate-500">Nome da Equipe / Identificação</label>
+                          <input 
+                            type="text"
+                            value={newEquipeNome}
+                            onChange={(e) => setNewEquipeNome(e.target.value)}
+                            placeholder="Ex: Wandell & Gabriel"
+                            className="w-full rounded-lg border-slate-200 bg-slate-50 py-2 text-sm"
+                            required
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold uppercase text-slate-500">Técnico Principal</label>
+                          <input 
+                            type="text"
+                            value={newEquipeTecnico}
+                            onChange={(e) => setNewEquipeTecnico(e.target.value)}
+                            placeholder="Nome do técnico"
+                            className="w-full rounded-lg border-slate-200 bg-slate-50 py-2 text-sm"
+                            required
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold uppercase text-slate-500">Ajudante (Opcional)</label>
+                          <input 
+                            type="text"
+                            value={newEquipeAjudante}
+                            onChange={(e) => setNewEquipeAjudante(e.target.value)}
+                            placeholder="Nome do ajudante"
+                            className="w-full rounded-lg border-slate-200 bg-slate-50 py-2 text-sm"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold uppercase text-slate-500">Função / Cargo</label>
+                          <select 
+                            value={newEquipeFuncao}
+                            onChange={(e) => setNewEquipeFuncao(e.target.value)}
+                            className="w-full rounded-lg border-slate-200 bg-slate-50 py-2 text-sm"
+                          >
+                            <option value="Técnico">Técnico</option>
+                            <option value="Dono / Técnico">Dono / Técnico</option>
+                            <option value="Gerente">Gerente</option>
+                            <option value="Ajudante">Ajudante</option>
+                            <option value="Externo">Externo</option>
+                          </select>
+                        </div>
+                        <button 
+                          type="submit"
+                          className="w-full rounded-lg bg-[#00a859] py-3 font-bold text-white hover:opacity-90 transition-all"
+                        >
+                          Salvar Equipe
+                        </button>
+                      </form>
+                    </motion.div>
+                  </div>
+                )}
+
                 {Object.keys(stats.byCondo).length > 0 && (
                   <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                     {/* Pie Chart: Status Distribution */}
@@ -1623,55 +1741,98 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                 exit={{ opacity: 0, y: -20 }}
                 className="space-y-6"
               >
-                <div className="flex flex-col gap-2">
-                  <h2 className="text-2xl font-bold">Gestão de Equipes</h2>
-                  <p className="text-slate-500">Monitore e gerencie o status dos técnicos em tempo real.</p>
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-2">
+                    <h2 className="text-2xl font-bold">Gestão de Equipes</h2>
+                    <p className="text-slate-500">Monitore e gerencie o status dos técnicos em tempo real.</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => fetchEquipes()}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all"
+                      title="Atualizar Lista"
+                    >
+                      <RefreshCw size={18} />
+                    </button>
+                    <button 
+                      onClick={() => setIsAddingEquipe(true)}
+                      className="flex items-center gap-2 rounded-xl bg-[#00a859] px-4 py-2 text-sm font-bold text-white shadow-lg shadow-[#00a859]/20 hover:bg-[#008d4a] transition-all"
+                    >
+                      <UserPlus size={18} />
+                      Nova Equipe
+                    </button>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-                  {equipes.map((equipe) => (
-                    <div key={equipe.id} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                      <div className="mb-4 flex items-center justify-between">
-                        <div className={`h-3 w-3 rounded-full ${
-                          equipe.status === 'Disponível' ? 'bg-green-500' :
-                          equipe.status === 'Emergência' ? 'bg-red-500 animate-pulse' :
-                          'bg-blue-500'
-                        }`} />
-                        <span className="text-[10px] font-bold uppercase text-slate-400">
-                          Atualizado: {new Date(equipe.ultima_atualizacao).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </div>
-                      
-                      <h3 className="text-lg font-bold text-slate-900">{equipe.nome_equipe}</h3>
-                      {equipe.funcao && (
-                        <span className="mb-2 inline-block text-[10px] font-bold uppercase tracking-wider text-[#00a859] bg-[#00a859]/10 px-2 py-0.5 rounded-full">
-                          {equipe.funcao}
-                        </span>
-                      )}
-                      <p className="mb-4 text-sm text-slate-500">
-                        {equipe.ajudante ? `Técnico: ${equipe.tecnico_principal} + ${equipe.ajudante}` : `Técnico: ${equipe.tecnico_principal}`}
-                      </p>
-
-                      <div className="space-y-3 rounded-xl bg-slate-50 p-4">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-slate-500">Status Atual:</span>
-                          <span className="font-bold text-slate-900">{equipe.status}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-slate-500">Localização:</span>
-                          <span className="font-bold text-slate-900 truncate max-w-[120px]">{equipe.local_atual || 'Base'}</span>
-                        </div>
-                      </div>
-
-                      <button 
-                        onClick={() => setIsDispatching(equipe.id)}
-                        className="mt-6 w-full rounded-lg border border-slate-200 bg-white py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all"
-                      >
-                        Mudar Status / Local
-                      </button>
+                {equipes.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50/50 py-20 text-center">
+                    <div className="mb-4 rounded-full bg-slate-100 p-4 text-slate-400">
+                      <Users size={48} />
                     </div>
-                  ))}
-                </div>
+                    <h3 className="text-lg font-bold text-slate-900">Nenhuma equipe cadastrada</h3>
+                    <p className="mb-6 max-w-xs text-sm text-slate-500">
+                      Adicione membros ou equipes para começar a gerenciar os atendimentos.
+                    </p>
+                    <button 
+                      onClick={() => setIsAddingEquipe(true)}
+                      className="rounded-xl bg-white border border-slate-200 px-6 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all"
+                    >
+                      Cadastrar Primeira Equipe
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    {equipes.map((equipe) => (
+                      <div key={equipe.id} className="group relative rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:shadow-md">
+                        <button 
+                          onClick={() => handleDeleteEquipe(equipe.id)}
+                          className="absolute right-4 top-4 opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-red-500 transition-all"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+
+                        <div className="mb-4 flex items-center justify-between">
+                          <div className={`h-3 w-3 rounded-full ${
+                            equipe.status === 'Disponível' ? 'bg-green-500' :
+                            equipe.status === 'Emergência' ? 'bg-red-500 animate-pulse' :
+                            'bg-blue-500'
+                          }`} />
+                          <span className="text-[10px] font-bold uppercase text-slate-400">
+                            Atualizado: {new Date(equipe.ultima_atualizacao).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        
+                        <h3 className="text-lg font-bold text-slate-900">{equipe.nome_equipe}</h3>
+                        {equipe.funcao && (
+                          <span className="mb-2 inline-block text-[10px] font-bold uppercase tracking-wider text-[#00a859] bg-[#00a859]/10 px-2 py-0.5 rounded-full">
+                            {equipe.funcao}
+                          </span>
+                        )}
+                        <p className="mb-4 text-sm text-slate-500">
+                          {equipe.ajudante ? `Técnico: ${equipe.tecnico_principal} + ${equipe.ajudante}` : `Técnico: ${equipe.tecnico_principal}`}
+                        </p>
+
+                        <div className="space-y-3 rounded-xl bg-slate-50 p-4">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-slate-500">Status Atual:</span>
+                            <span className="font-bold text-slate-900">{equipe.status}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-slate-500">Localização:</span>
+                            <span className="font-bold text-slate-900 truncate max-w-[120px]">{equipe.local_atual || 'Base'}</span>
+                          </div>
+                        </div>
+
+                        <button 
+                          onClick={() => setIsDispatching(equipe.id)}
+                          className="mt-6 w-full rounded-lg border border-slate-200 bg-white py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all"
+                        >
+                          Mudar Status / Local
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </motion.div>
             ) : view === 'preventivas' && isMaster ? (
               <motion.div
@@ -2358,6 +2519,139 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                   />
                 </div>
               </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Modal de Despacho */}
+          <AnimatePresence>
+            {isDispatching && (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+                >
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="text-lg font-bold">Direcionar Equipe</h3>
+                    <button onClick={() => setIsDispatching(null)} className="text-slate-400 hover:text-slate-600">
+                      <X size={20} />
+                    </button>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold uppercase text-slate-500">Condomínio de Destino</label>
+                      <select 
+                        value={dispatchLocal}
+                        onChange={(e) => setDispatchLocal(e.target.value)}
+                        className="w-full rounded-lg border-slate-200 bg-slate-50 py-2 text-sm"
+                      >
+                        <option value="">Selecione o Condomínio</option>
+                        <option value="Base / Central">Base / Central</option>
+                        <option value="Emergência Geral">Emergência Geral</option>
+                        {users.filter(u => u.role === 'condo').map(u => (
+                          <option key={u.login} value={u.condominio}>{u.condominio}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold uppercase text-slate-500">Status da Missão</label>
+                      <select 
+                        value={dispatchStatus}
+                        onChange={(e) => setDispatchStatus(e.target.value)}
+                        className="w-full rounded-lg border-slate-200 bg-slate-50 py-2 text-sm"
+                      >
+                        <option value="Em Atendimento">Em Atendimento</option>
+                        <option value="Emergência">Emergência</option>
+                        <option value="Preventiva">Preventiva</option>
+                        <option value="Deslocamento">Deslocamento</option>
+                        <option value="Disponível">Disponível (Base)</option>
+                      </select>
+                    </div>
+                    <button 
+                      onClick={() => handleDispatch(isDispatching)}
+                      className="w-full rounded-lg bg-[#00a859] py-3 font-bold text-white hover:opacity-90 transition-all"
+                    >
+                      Confirmar Direcionamento
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
+          {/* Modal de Adicionar Equipe */}
+          <AnimatePresence>
+            {isAddingEquipe && (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+                >
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="text-lg font-bold">Cadastrar Nova Equipe</h3>
+                    <button onClick={() => setIsAddingEquipe(false)} className="text-slate-400 hover:text-slate-600">
+                      <X size={20} />
+                    </button>
+                  </div>
+                  <form onSubmit={handleCreateEquipe} className="space-y-4">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold uppercase text-slate-500">Nome da Equipe / Identificação</label>
+                      <input 
+                        type="text"
+                        value={newEquipeNome}
+                        onChange={(e) => setNewEquipeNome(e.target.value)}
+                        placeholder="Ex: Wandell & Gabriel"
+                        className="w-full rounded-lg border-slate-200 bg-slate-50 py-2 text-sm"
+                        required
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold uppercase text-slate-500">Técnico Principal</label>
+                      <input 
+                        type="text"
+                        value={newEquipeTecnico}
+                        onChange={(e) => setNewEquipeTecnico(e.target.value)}
+                        placeholder="Nome do técnico"
+                        className="w-full rounded-lg border-slate-200 bg-slate-50 py-2 text-sm"
+                        required
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold uppercase text-slate-500">Ajudante (Opcional)</label>
+                      <input 
+                        type="text"
+                        value={newEquipeAjudante}
+                        onChange={(e) => setNewEquipeAjudante(e.target.value)}
+                        placeholder="Nome do ajudante"
+                        className="w-full rounded-lg border-slate-200 bg-slate-50 py-2 text-sm"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold uppercase text-slate-500">Função / Cargo</label>
+                      <select 
+                        value={newEquipeFuncao}
+                        onChange={(e) => setNewEquipeFuncao(e.target.value)}
+                        className="w-full rounded-lg border-slate-200 bg-slate-50 py-2 text-sm"
+                      >
+                        <option value="Técnico">Técnico</option>
+                        <option value="Dono / Técnico">Dono / Técnico</option>
+                        <option value="Gerente">Gerente</option>
+                        <option value="Ajudante">Ajudante</option>
+                        <option value="Externo">Externo</option>
+                      </select>
+                    </div>
+                    <button 
+                      type="submit"
+                      className="w-full rounded-lg bg-[#00a859] py-3 font-bold text-white hover:opacity-90 transition-all"
+                    >
+                      Salvar Equipe
+                    </button>
+                  </form>
+                </motion.div>
+              </div>
             )}
           </AnimatePresence>
 

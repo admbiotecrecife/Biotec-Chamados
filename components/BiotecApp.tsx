@@ -169,6 +169,8 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
         prioridade: c.prioridade || 'Média',
         imageUrl: c.image_url || c.imageUrl || '',
         resolutionImageUrl: c.resolution_image_url || c.resolutionImageUrl || '',
+        feedbackRating: c.feedback_rating || c.feedbackRating || 0,
+        feedbackComment: c.feedback_comment || c.feedbackComment || '',
         condominio: String(c.condominio || ''),
         status: c.status || 'Pendente'
       }));

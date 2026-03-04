@@ -20,7 +20,12 @@ CREATE TABLE IF NOT EXISTS chamados (
   descricao TEXT NOT NULL,
   resolucao TEXT,
   status TEXT NOT NULL DEFAULT 'Pendente',
+  prioridade TEXT NOT NULL DEFAULT 'Média',
   created_by TEXT NOT NULL,
+  image_url TEXT,
+  resolution_image_url TEXT,
+  feedback_rating INTEGER,
+  feedback_comment TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

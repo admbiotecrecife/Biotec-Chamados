@@ -1,15 +1,8 @@
-import { createClient } from '@supabase/supabase-js';
-
-function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
+import { getSupabaseAdmin } from '@/lib/supabase';
 
 export async function GET(req: Request) {
   try {
-    const supabase = getSupabase();
+    const supabase = getSupabaseAdmin();
     const { searchParams } = new URL(req.url);
     const condo = searchParams.get('condo');
     
@@ -30,7 +23,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const supabase = getSupabase();
+    const supabase = getSupabaseAdmin();
     const body = await req.json();
     const { data, error } = await supabase
       .from('preventivas')

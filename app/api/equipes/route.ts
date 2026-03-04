@@ -1,15 +1,8 @@
-import { createClient } from '@supabase/supabase-js';
-
-function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
+import { getSupabaseAdmin } from '@/lib/supabase';
 
 export async function GET() {
   try {
-    const supabase = getSupabase();
+    const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from('equipes')
       .select('*')
@@ -24,7 +17,7 @@ export async function GET() {
 
 export async function PUT(req: Request) {
   try {
-    const supabase = getSupabase();
+    const supabase = getSupabaseAdmin();
     const body = await req.json();
     const { id, ...updates } = body;
     
@@ -48,7 +41,7 @@ export async function PUT(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const supabase = getSupabase();
+    const supabase = getSupabaseAdmin();
     const body = await req.json();
     
     const { data, error } = await supabase
@@ -65,7 +58,7 @@ export async function POST(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
-    const supabase = getSupabase();
+    const supabase = getSupabaseAdmin();
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
     

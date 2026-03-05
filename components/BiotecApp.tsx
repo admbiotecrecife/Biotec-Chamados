@@ -86,6 +86,8 @@ interface Chamado {
   createdBy: string;
   imageUrl?: string;
   resolutionImageUrl?: string;
+  has_image?: boolean;
+  has_resolution_image?: boolean;
   feedbackRating?: number;
   feedbackComment?: string;
 }
@@ -188,8 +190,28 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
   const [prevEquipeId, setPrevEquipeId] = React.useState('');
   const [prevItens, setPrevItens] = React.useState<string[]>([]);
   const [prevObs, setPrevObs] = React.useState('');
-  const [prevProxima, setPrevProxima] = React.useState('');
   const [isCreatingPrev, setIsCreatingPrev] = React.useState(false);
+  const [isFetchingImage, setIsFetchingImage] = React.useState(false);
+
+  const handleViewImage = async (id: string, type: 'problem' | 'resolution') => {
+    setIsFetchingImage(true);
+    try {
+      const res = await fetch(`/api/chamados/${id}`);
+      if (!res.ok) throw new Error('Erro ao buscar imagem');
+      const data = await res.json();
+      const url = type === 'problem' ? (data.image_url || data.imageUrl) : (data.resolution_image_url || data.resolutionImageUrl);
+      if (url) {
+        setSelectedImage(url);
+      } else {
+        alert('Imagem não encontrada.');
+      }
+    } catch (error) {
+      console.error('Erro ao buscar imagem:', error);
+      alert('Erro ao carregar imagem.');
+    } finally {
+      setIsFetchingImage(false);
+    }
+  };
 
   const isLocked = !isMaster && view === 'edit' && status === 'Concluído';
 
@@ -202,8 +224,24 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     if (!isSilent) setLoading(true);
     try {
       const res = await fetch('/api/chamados');
+      
+      // Check if response is JSON before parsing
+      const contentType = res.headers.get('content-type');
+      if (!res.ok) {
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await res.json();
+          throw new Error(errorData.error || `Erro ${res.status}: Falha ao buscar chamados`);
+        } else {
+          // If not JSON, it might be a 502 HTML page from Supabase/Cloudflare
+          const text = await res.text();
+          if (text.includes('Bad gateway') || text.includes('502')) {
+            throw new Error('O servidor do banco de dados (Supabase) está temporariamente indisponível (Erro 502). Por favor, verifique se o projeto não está pausado ou tente novamente em alguns minutos.');
+          }
+          throw new Error(`Erro ${res.status}: O servidor retornou uma resposta inesperada.`);
+        }
+      }
+
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao buscar chamados');
       
       const mappedData = (Array.isArray(data) ? data : []).map((c: any) => ({
         ...c,
@@ -251,8 +289,15 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
   const fetchEquipes = React.useCallback(async () => {
     try {
       const res = await fetch('/api/equipes');
+      if (!res.ok) {
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await res.json();
+          throw new Error(errorData.error || 'Erro ao buscar equipes');
+        }
+        throw new Error(`Erro ${res.status} ao buscar equipes`);
+      }
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao buscar equipes');
       setEquipes(data);
     } catch (error) {
       console.error('Erro ao buscar equipes:', error);
@@ -262,8 +307,15 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
   const fetchPreventivas = React.useCallback(async (condo = 'all') => {
     try {
       const res = await fetch(`/api/preventivas?condo=${condo}`);
+      if (!res.ok) {
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await res.json();
+          throw new Error(errorData.error || 'Erro ao buscar preventivas');
+        }
+        throw new Error(`Erro ${res.status} ao buscar preventivas`);
+      }
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao buscar preventivas');
       setPreventivas(data);
     } catch (error) {
       console.error('Erro ao buscar preventivas:', error);
@@ -348,8 +400,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
           tecnico_responsavel: prevTecnico,
           equipe_id: prevEquipeId || null,
           itens_verificados: prevItens,
-          observacoes: prevObs,
-          proxima_visita: prevProxima || null
+          observacoes: prevObs
         })
       });
 
@@ -361,7 +412,6 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
       setPrevEquipeId('');
       setPrevItens([]);
       setPrevObs('');
-      setPrevProxima('');
       fetchPreventivas();
     } catch (error) {
       console.error('Erro ao criar preventiva:', error);
@@ -405,12 +455,6 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     doc.text('Observações:', 20, finalY + 20);
     doc.setFontSize(10);
     doc.text(p.observacoes || 'Nenhuma observação registrada.', 20, finalY + 30, { maxWidth: 170 });
-    
-    if (p.proxima_visita) {
-      doc.setFontSize(12);
-      doc.setTextColor(0, 168, 89);
-      doc.text(`Próxima Visita Agendada: ${new Date(p.proxima_visita).toLocaleDateString('pt-BR')}`, 20, finalY + 50);
-    }
     
     doc.save(`Preventiva_${p.condominio}_${new Date(p.data_visita).toLocaleDateString('pt-BR')}.pdf`);
   };
@@ -604,21 +648,33 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     setView('create');
   };
 
-  const handleEdit = (chamado: Chamado) => {
-    setEditingId(chamado.id);
-    setProblemType(chamado.problemType);
-    setPrioridade(chamado.prioridade || 'Média');
-    setCondominio(chamado.condominio);
-    setBloco(chamado.bloco);
-    setApto(chamado.apto);
-    setDescricao(chamado.descricao);
-    setResolucao(chamado.resolucao || '');
-    setStatus(chamado.status);
-    setImageUrl(chamado.imageUrl || '');
-    setResolutionImageUrl(chamado.resolutionImageUrl || '');
-    setFeedbackRating(chamado.feedbackRating || 0);
-    setFeedbackComment(chamado.feedbackComment || '');
-    setView('edit');
+  const handleEdit = async (chamado: Chamado) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/chamados/${chamado.id}`);
+      if (!res.ok) throw new Error('Erro ao buscar detalhes do chamado');
+      const fullChamado = await res.json();
+      
+      setEditingId(fullChamado.id);
+      setProblemType(fullChamado.problem_type || fullChamado.problemType);
+      setPrioridade(fullChamado.prioridade || 'Média');
+      setCondominio(fullChamado.condominio);
+      setBloco(fullChamado.bloco);
+      setApto(fullChamado.apto);
+      setDescricao(fullChamado.descricao);
+      setResolucao(fullChamado.resolucao || '');
+      setStatus(fullChamado.status);
+      setImageUrl(fullChamado.image_url || fullChamado.imageUrl || '');
+      setResolutionImageUrl(fullChamado.resolution_image_url || fullChamado.resolutionImageUrl || '');
+      setFeedbackRating(fullChamado.feedback_rating || fullChamado.feedbackRating || 0);
+      setFeedbackComment(fullChamado.feedback_comment || fullChamado.feedbackComment || '');
+      setView('edit');
+    } catch (error) {
+      console.error('Erro ao editar:', error);
+      alert('Erro ao carregar detalhes do chamado.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -890,21 +946,37 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
           const imgWidth = 80;
           const imgHeight = 60;
 
-          if (c.imageUrl) {
-            try {
-              doc.addImage(c.imageUrl, 'JPEG', 14, yPos, imgWidth, imgHeight);
-              doc.text('Foto do Problema', 14, yPos + imgHeight + 5);
-            } catch (e) {
-              console.error('Erro ao adicionar imagem do problema ao PDF', e);
+          if (c.imageUrl || c.has_image) {
+            if (c.imageUrl) {
+              try {
+                doc.addImage(c.imageUrl, 'JPEG', 14, yPos, imgWidth, imgHeight);
+                doc.text('Foto do Problema', 14, yPos + imgHeight + 5);
+              } catch (e) {
+                console.error('Erro ao adicionar imagem do problema ao PDF', e);
+              }
+            } else {
+              doc.setFontSize(8);
+              doc.setTextColor(150);
+              doc.text('[Imagem disponível no sistema - abra o chamado para visualizar]', 14, yPos + 10);
+              doc.setFontSize(10);
+              doc.setTextColor(50);
             }
           }
 
-          if (c.resolutionImageUrl) {
-            try {
-              doc.addImage(c.resolutionImageUrl, 'JPEG', 100, yPos, imgWidth, imgHeight);
-              doc.text('Foto da Resolução', 100, yPos + imgHeight + 5);
-            } catch (e) {
-              console.error('Erro ao adicionar imagem da resolução ao PDF', e);
+          if (c.resolutionImageUrl || c.has_resolution_image) {
+            if (c.resolutionImageUrl) {
+              try {
+                doc.addImage(c.resolutionImageUrl, 'JPEG', 100, yPos, imgWidth, imgHeight);
+                doc.text('Foto da Resolução', 100, yPos + imgHeight + 5);
+              } catch (e) {
+                console.error('Erro ao adicionar imagem da resolução ao PDF', e);
+              }
+            } else {
+              doc.setFontSize(8);
+              doc.setTextColor(150);
+              doc.text('[Imagem disponível no sistema - abra o chamado para visualizar]', 100, yPos + 10);
+              doc.setFontSize(10);
+              doc.setTextColor(50);
             }
           }
 
@@ -1470,7 +1542,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                         chamado={chamado} 
                         onEdit={() => handleEdit(chamado)}
                         onDelete={() => handleDelete(chamado.id)}
-                        onImageClick={(url) => setSelectedImage(url)}
+                        onImageClick={(type) => handleViewImage(chamado.id, type)}
                         showCondo={isMaster}
                         isMaster={isMaster}
                       />
@@ -1884,7 +1956,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                         <div className="flex flex-col gap-2">
                           <label className="text-[10px] font-bold uppercase text-slate-500">Itens Verificados</label>
                           <div className="grid grid-cols-1 gap-2">
-                            {['Interfonia', 'Sinal de TV', 'Cabeamento', 'Central de Portaria', 'Câmeras / CFTV'].map(item => (
+                            {['Interfonia', 'Sinal de TV', 'Cabeamento', 'Central de Portaria', 'Câmeras / CFTV', 'Portão de veículos', 'Portão de pedestre', 'Cerca elétrica'].map(item => (
                               <label key={item} className="flex items-center gap-2 text-xs cursor-pointer">
                                 <input 
                                   type="checkbox" 
@@ -1896,16 +1968,6 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                               </label>
                             ))}
                           </div>
-                        </div>
-
-                        <div className="flex flex-col gap-1">
-                          <label className="text-[10px] font-bold uppercase text-slate-500">Próxima Visita (Opcional)</label>
-                          <input 
-                            type="date"
-                            value={prevProxima}
-                            onChange={(e) => setPrevProxima(e.target.value)}
-                            className="w-full rounded-lg border-slate-200 bg-slate-50 py-2 text-sm"
-                          />
                         </div>
 
                         <div className="flex flex-col gap-1">
@@ -2763,7 +2825,7 @@ function ProblemOption({ id, icon, label, selected, onClick, disabled }: { id: s
   );
 }
 
-function ChamadoCard({ chamado, onEdit, onDelete, onImageClick, showCondo, isMaster }: { chamado: Chamado, onEdit: () => void, onDelete: () => void, onImageClick: (url: string) => void, showCondo?: boolean, isMaster?: boolean }) {
+function ChamadoCard({ chamado, onEdit, onDelete, onImageClick, showCondo, isMaster }: { chamado: Chamado, onEdit: () => void, onDelete: () => void, onImageClick: (type: 'problem' | 'resolution') => void, showCondo?: boolean, isMaster?: boolean }) {
   const statusColors = {
     'Pendente': 'bg-amber-100 text-amber-700 border-amber-200',
     'Em Andamento': 'bg-blue-100 text-blue-700 border-blue-200',
@@ -2798,6 +2860,9 @@ function ChamadoCard({ chamado, onEdit, onDelete, onImageClick, showCondo, isMas
     const minutes = Math.floor(diff / (1000 * 60));
     return `Aberto há ${minutes} ${minutes === 1 ? 'minuto' : 'minutos'}`;
   };
+
+  const hasProblemImage = chamado.imageUrl || chamado.has_image;
+  const hasResolutionImage = chamado.resolutionImageUrl || chamado.has_resolution_image;
 
   return (
     <div 
@@ -2854,26 +2919,38 @@ function ChamadoCard({ chamado, onEdit, onDelete, onImageClick, showCondo, isMas
         {chamado.descricao}
       </p>
 
-      {(chamado.imageUrl || chamado.resolutionImageUrl) && (
+      {(hasProblemImage || hasResolutionImage) && (
         <div className="mb-4 flex gap-2">
-          {chamado.imageUrl && (
+          {hasProblemImage && (
             <div 
               className="relative h-12 w-12 overflow-hidden rounded-lg border border-slate-100 bg-slate-50 cursor-pointer" 
-              onClick={(e) => { e.stopPropagation(); onImageClick(chamado.imageUrl!); }}
+              onClick={(e) => { e.stopPropagation(); onImageClick('problem'); }}
             >
-              <Image src={chamado.imageUrl} alt="Problema" fill className="object-cover" referrerPolicy="no-referrer" />
-              <div className="absolute inset-0 flex items-center justify-center bg-black/10">
+              {chamado.imageUrl ? (
+                <Image src={chamado.imageUrl} alt="Problema" fill className="object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-slate-100">
+                  <Paperclip size={16} className="text-slate-400" />
+                </div>
+              )}
+              <div className="absolute inset-0 flex items-center justify-center bg-black/5">
                 <Paperclip size={10} className="text-white" />
               </div>
             </div>
           )}
-          {chamado.resolutionImageUrl && (
+          {hasResolutionImage && (
             <div 
               className="relative h-12 w-12 overflow-hidden rounded-lg border border-emerald-100 bg-emerald-50 cursor-pointer" 
-              onClick={(e) => { e.stopPropagation(); onImageClick(chamado.resolutionImageUrl!); }}
+              onClick={(e) => { e.stopPropagation(); onImageClick('resolution'); }}
             >
-              <Image src={chamado.resolutionImageUrl} alt="Resolução" fill className="object-cover" referrerPolicy="no-referrer" />
-              <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/20">
+              {chamado.resolutionImageUrl ? (
+                <Image src={chamado.resolutionImageUrl} alt="Resolução" fill className="object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-emerald-50">
+                  <CheckCircle2 size={16} className="text-emerald-400" />
+                </div>
+              )}
+              <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/10">
                 <CheckCircle2 size={10} className="text-emerald-600" />
               </div>
             </div>

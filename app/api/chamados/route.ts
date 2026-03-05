@@ -6,11 +6,21 @@ export async function GET() {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from('chamados')
-      .select('*')
+      .select('id, created_at, created_by, condominio, bloco, apto, problem_type, descricao, resolucao, status, prioridade, feedback_rating, feedback_comment, image_url, resolution_image_url')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return NextResponse.json(data);
+    
+    // Transform data to only send boolean flags for images instead of full Base64
+    const summaryData = (data || []).map(c => ({
+      ...c,
+      has_image: !!c.image_url,
+      has_resolution_image: !!c.resolution_image_url,
+      image_url: null,
+      resolution_image_url: null
+    }));
+
+    return NextResponse.json(summaryData);
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

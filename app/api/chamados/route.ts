@@ -1,13 +1,18 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const limit = parseInt(searchParams.get('limit') || '50');
+    const offset = parseInt(searchParams.get('offset') || '0');
+
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from('chamados')
       .select('id, created_at, created_by, condominio, bloco, apto, problem_type, descricao, resolucao, status, prioridade, feedback_rating, feedback_comment, image_url, resolution_image_url')
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
 
     if (error) throw error;
     

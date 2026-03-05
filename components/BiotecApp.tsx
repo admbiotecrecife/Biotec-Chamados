@@ -125,6 +125,9 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
   const [view, setView] = React.useState<View>('list');
   const [isInitialized, setIsInitialized] = React.useState(false);
   const [chamados, setChamados] = React.useState<Chamado[]>([]);
+  const [hasMore, setHasMore] = React.useState(true);
+  const [page, setPage] = React.useState(0);
+  const PAGE_SIZE = 50;
   const [loading, setLoading] = React.useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   
@@ -220,10 +223,11 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     localStorage.setItem(`biotec_view_${user}`, newView);
   };
 
-  const fetchChamados = React.useCallback(async (isSilent = false) => {
+  const fetchChamados = React.useCallback(async (isSilent = false, reset = false) => {
     if (!isSilent) setLoading(true);
     try {
-      const res = await fetch('/api/chamados');
+      const currentPage = reset ? 0 : page;
+      const res = await fetch(`/api/chamados?limit=${PAGE_SIZE}&offset=${currentPage * PAGE_SIZE}`);
       
       // Check if response is JSON before parsing
       const contentType = res.headers.get('content-type');
@@ -242,8 +246,9 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
       }
 
       const data = await res.json();
+      const rawData = Array.isArray(data) ? data : [];
       
-      const mappedData = (Array.isArray(data) ? data : []).map((c: any) => ({
+      const mappedData = rawData.map((c: any) => ({
         ...c,
         id: String(c.id),
         createdAt: c.created_at || c.createdAt || new Date().toISOString(),
@@ -258,8 +263,8 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
         status: c.status || 'Pendente'
       }));
       
-      // Notification Logic for Master
-      if (isMaster && lastTicketId && mappedData.length > 0) {
+      // Notification Logic for Master (only on first page)
+      if (currentPage === 0 && isMaster && lastTicketId && mappedData.length > 0) {
         const latest = mappedData[0];
         if (latest.id !== lastTicketId && latest.createdBy.toLowerCase() !== user.toLowerCase()) {
           setNewTicketToast({ id: latest.id, condo: latest.condominio });
@@ -274,17 +279,41 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
         }
       }
 
-      if (mappedData.length > 0) {
+      if (currentPage === 0 && mappedData.length > 0) {
         setLastTicketId(mappedData[0].id);
       }
       
-      setChamados(mappedData);
+      if (reset) {
+        setChamados(mappedData);
+        setPage(0);
+      } else {
+        setChamados(prev => {
+          const existingIds = new Set(prev.map(p => p.id));
+          const uniqueNew = mappedData.filter(m => !existingIds.has(m.id));
+          return [...prev, ...uniqueNew];
+        });
+      }
+      
+      setHasMore(mappedData.length === PAGE_SIZE);
     } catch (error: any) {
       console.error('Erro ao buscar chamados:', error);
     } finally {
       if (!isSilent) setLoading(false);
     }
-  }, [isMaster, lastTicketId, user]);
+  }, [isMaster, lastTicketId, user, page]);
+
+  const loadMore = () => {
+    if (!loading && hasMore) {
+      setPage(prev => prev + 1);
+    }
+  };
+
+  // Trigger fetch when page changes (only if not reset)
+  React.useEffect(() => {
+    if (page > 0) {
+      fetchChamados(false, false);
+    }
+  }, [page]);
 
   const fetchEquipes = React.useCallback(async () => {
     try {
@@ -480,7 +509,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     }
     setIsInitialized(true);
 
-    fetchChamados();
+    fetchChamados(false, true);
     if (isMaster) {
       fetchEquipes();
       fetchPreventivas();
@@ -697,20 +726,47 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
       return;
     }
 
-    if (file.size > 2 * 1024 * 1024) {
-      alert('A imagem é muito grande. Por favor, use uma imagem de até 2MB.');
-      return;
-    }
-
     setIsUploading(true);
     try {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64String = reader.result as string;
-        if (type === 'problem') setImageUrl(base64String);
-        else setResolutionImageUrl(base64String);
-        setIsUploading(true); // Keep it true for a moment to show "loading" effect if needed
-        setTimeout(() => setIsUploading(false), 500);
+      reader.onload = (event) => {
+        const img = new window.Image();
+        img.onload = () => {
+          // Create canvas for resizing
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          // Max dimensions for compression (e.g., 1024px)
+          const MAX_WIDTH = 1024;
+          const MAX_HEIGHT = 1024;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+
+          // Compress to JPEG with 0.7 quality
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+          
+          if (type === 'problem') setImageUrl(compressedBase64);
+          else setResolutionImageUrl(compressedBase64);
+          
+          setIsUploading(false);
+        };
+        img.src = event.target?.result as string;
       };
       reader.readAsDataURL(file);
     } catch (error) {
@@ -794,7 +850,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
       }
       
       setSubmitted(true);
-      fetchChamados();
+      fetchChamados(false, true);
       
       setTimeout(() => {
         setView('list');
@@ -1478,7 +1534,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                   </div>
                   <div className="flex items-center gap-2">
                     <button 
-                      onClick={() => fetchChamados()}
+                      onClick={() => fetchChamados(false, true)}
                       disabled={loading}
                       title="Atualizar lista"
                       className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-[#00a859] transition-all disabled:opacity-50"
@@ -1547,6 +1603,23 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                         isMaster={isMaster}
                       />
                     ))}
+                  </div>
+                )}
+
+                {hasMore && !loading && filteredChamados.length > 0 && (
+                  <div className="mt-8 flex justify-center">
+                    <button
+                      onClick={loadMore}
+                      className="rounded-full border border-slate-200 bg-white px-8 py-2 text-sm font-bold text-slate-600 shadow-sm transition-all hover:border-[#00a859] hover:text-[#00a859]"
+                    >
+                      Carregar mais chamados
+                    </button>
+                  </div>
+                )}
+
+                {loading && chamados.length > 0 && (
+                  <div className="mt-8 flex justify-center">
+                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#00a859] border-t-transparent" />
                   </div>
                 )}
               </motion.div>

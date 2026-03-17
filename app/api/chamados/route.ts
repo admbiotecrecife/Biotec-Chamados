@@ -10,17 +10,18 @@ export async function GET(request: Request) {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from('chamados')
-      .select('id, created_at, created_by, condominio, bloco, apto, problem_type, descricao, resolucao, status, prioridade, feedback_rating, feedback_comment, image_url, resolution_image_url')
+      .select('id, created_at, created_by, condominio, bloco, apto, problem_type, descricao, resolucao, status, prioridade, feedback_rating, feedback_comment')
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
     if (error) throw error;
     
-    // Transform data to only send boolean flags for images instead of full Base64
+    // As imagens base64 não são mais puxadas na listagem para salvar banda e evitar Timeouts Vercel/Supabase.
+    // O cliente vai assumir que não se sabe se tem imagem até abrir ou vamos sempre mostrar o botão
     const summaryData = (data || []).map(c => ({
       ...c,
-      has_image: !!c.image_url,
-      has_resolution_image: !!c.resolution_image_url,
+      has_image: true, // We set to true so the UI shows the button, if clicked the modal will fetch and handle 404/null
+      has_resolution_image: true,
       image_url: null,
       resolution_image_url: null
     }));

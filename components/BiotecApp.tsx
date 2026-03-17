@@ -41,7 +41,8 @@ import {
   PieChart as PieChartIcon,
   TrendingUp,
   ShieldAlert,
-  Star
+  Star,
+  FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Image from 'next/image';
@@ -206,7 +207,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
       if (url) {
         setSelectedImage(url);
       } else {
-        alert('Imagem não encontrada.');
+        alert('Este chamado não possui imagem registrada.');
       }
     } catch (error) {
       console.error('Erro ao buscar imagem:', error);
@@ -486,6 +487,81 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     doc.text(p.observacoes || 'Nenhuma observação registrada.', 20, finalY + 30, { maxWidth: 170 });
     
     doc.save(`Preventiva_${p.condominio}_${new Date(p.data_visita).toLocaleDateString('pt-BR')}.pdf`);
+  };
+
+  const exportOSPDF = (c: Chamado) => {
+    const doc = new jsPDF();
+    
+    // Header
+    doc.setFillColor(0, 168, 89);
+    doc.rect(0, 0, 210, 40, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(24);
+    doc.setFont('helvetica', 'bold');
+    doc.text('BIOTEC', 105, 20, { align: 'center' });
+    doc.setFontSize(14);
+    doc.text('ORDEM DE SERVIÇO', 105, 30, { align: 'center' });
+    
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    
+    // Ticket Info Box
+    doc.setDrawColor(200, 200, 200);
+    doc.rect(14, 45, 182, 35);
+    
+    doc.setFont('helvetica', 'bold');
+    doc.text('DADOS DO CHAMADO', 16, 50);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`ID: ${c.id}`, 16, 58);
+    doc.text(`Data de Abertura: ${new Date(c.createdAt).toLocaleString('pt-BR')}`, 16, 64);
+    doc.text(`Condomínio: ${c.condominio}`, 16, 70);
+    doc.text(`Local: Bloco ${c.bloco} - Apto ${c.apto}`, 16, 76);
+    
+    // Service Details
+    doc.setFont('helvetica', 'bold');
+    doc.text('DETALHES DO SERVIÇO', 16, 90);
+    doc.setFont('helvetica', 'normal');
+    
+    autoTable(doc, {
+      startY: 95,
+      head: [['Campo', 'Descrição']],
+      body: [
+        ['Tipo de Problema', c.problemType === 'interfone' ? 'Interfone' : c.problemType === 'tv' ? 'Sinal de TV' : 'Outro'],
+        ['Prioridade', c.prioridade || 'Média'],
+        ['Status Atual', c.status],
+        ['Descrição', c.descricao],
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: [0, 168, 89] },
+      columnStyles: {
+        0: { fontStyle: 'bold', cellWidth: 40 },
+        1: { cellWidth: 142 }
+      }
+    });
+    
+    const finalY = (doc as any).lastAutoTable.finalY || 130;
+    
+    // Resolution Section
+    doc.setFont('helvetica', 'bold');
+    doc.text('RESOLUÇÃO / LAUDO TÉCNICO', 16, finalY + 15);
+    doc.setFont('helvetica', 'normal');
+    doc.rect(14, finalY + 18, 182, 40);
+    doc.text(c.resolucao || 'Serviço em andamento ou aguardando descrição técnica.', 18, finalY + 25, { maxWidth: 175 });
+    
+    // Signatures
+    const sigY = finalY + 75;
+    doc.line(20, sigY, 90, sigY);
+    doc.text('Assinatura do Técnico', 55, sigY + 5, { align: 'center' });
+    
+    doc.line(120, sigY, 190, sigY);
+    doc.text('Assinatura do Responsável', 155, sigY + 5, { align: 'center' });
+    
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text(`Documento gerado em ${new Date().toLocaleString('pt-BR')} via Sistema Biotec`, 105, 285, { align: 'center' });
+    
+    doc.save(`OS_${c.condominio}_${c.id.substring(0, 8)}.pdf`);
   };
 
   const fetchUsers = async () => {
@@ -1593,12 +1669,22 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                 ) : (
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {filteredChamados.map((chamado) => (
-                      <ChamadoCard 
-                        key={chamado.id} 
-                        chamado={chamado} 
-                        onEdit={() => handleEdit(chamado)}
-                        onDelete={() => handleDelete(chamado.id)}
-                        onImageClick={(type) => handleViewImage(chamado.id, type)}
+                      <ChamadoCard
+                        key={chamado.id}
+                        chamado={chamado}
+                        onEdit={async () => {
+                          setEditingChamado(chamado);
+                          setView('edit');
+                        }}
+                        onDelete={async () => {
+                          if (confirm('Tem certeza que deseja excluir este chamado?')) {
+                            handleDelete(chamado.id);
+                          }
+                        }}
+                        onImageClick={async (type) => {
+                          setSelectedImage({ url: type === 'problem' ? chamado.imageUrl : chamado.resolutionImageUrl, type });
+                        }}
+                        onExportOS={() => exportOSPDF(chamado)}
                         showCondo={isMaster}
                         isMaster={isMaster}
                       />
@@ -2560,7 +2646,20 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                         </div>
                       )}
 
-                      <div className="mt-4 pt-4 border-t border-slate-100 flex gap-3">
+                      <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col sm:flex-row gap-3">
+                        {view === 'edit' && editingId && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const c = chamados.find(ch => ch.id === editingId);
+                              if (c) exportOSPDF(c);
+                            }}
+                            className="flex-1 rounded-lg border border-blue-200 bg-blue-50 py-4 text-base font-bold text-blue-600 hover:bg-blue-100 transition-all flex items-center justify-center gap-2"
+                          >
+                            <FileText size={20} />
+                            Gerar OS
+                          </button>
+                        )}
                         <button 
                           type="button"
                           onClick={() => setView('list')}
@@ -2898,7 +2997,7 @@ function ProblemOption({ id, icon, label, selected, onClick, disabled }: { id: s
   );
 }
 
-function ChamadoCard({ chamado, onEdit, onDelete, onImageClick, showCondo, isMaster }: { chamado: Chamado, onEdit: () => void, onDelete: () => void, onImageClick: (type: 'problem' | 'resolution') => void, showCondo?: boolean, isMaster?: boolean }) {
+function ChamadoCard({ chamado, onEdit, onDelete, onImageClick, onExportOS, showCondo, isMaster }: { chamado: Chamado, onEdit: () => void, onDelete: () => void, onImageClick: (type: 'problem' | 'resolution') => void, onExportOS: () => void, showCondo?: boolean, isMaster?: boolean }) {
   const statusColors = {
     'Pendente': 'bg-amber-100 text-amber-700 border-amber-200',
     'Em Andamento': 'bg-blue-100 text-blue-700 border-blue-200',
@@ -2962,13 +3061,24 @@ function ChamadoCard({ chamado, onEdit, onDelete, onImageClick, showCondo, isMas
             <span className={chamado.status !== 'Concluído' ? 'text-amber-600' : ''}>{chamado.status === 'Concluído' ? 'Finalizado' : getSLA()}</span>
           </div>
         </div>
-        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
           <button 
             onClick={(e) => { e.stopPropagation(); onEdit(); }} 
             className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-[#00a859]"
           >
             {isLocked ? <Eye size={16} /> : <Edit3 size={16} />}
           </button>
+          <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onExportOS();
+              }}
+              className="p-1 px-2 text-blue-500 hover:bg-blue-50 rounded-md flex items-center gap-1 text-xs border border-blue-200"
+              title="Gerar Ordem de Serviço"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>OS</span>
+            </button>
           {isMaster && (
             <button 
               onClick={(e) => { e.stopPropagation(); onDelete(); }} 

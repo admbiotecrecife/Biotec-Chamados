@@ -288,9 +288,9 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
         setChamados(mappedData);
         setPage(0);
       } else {
-        setChamados(prev => {
-          const existingIds = new Set(prev.map(p => p.id));
-          const uniqueNew = mappedData.filter(m => !existingIds.has(m.id));
+        setChamados((prev: Chamado[]) => {
+          const existingIds = new Set(prev.map((p: Chamado) => p.id));
+          const uniqueNew = mappedData.filter((m: Chamado) => !existingIds.has(m.id));
           return [...prev, ...uniqueNew];
         });
       }
@@ -346,7 +346,11 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
         throw new Error(`Erro ${res.status} ao buscar preventivas`);
       }
       const data = await res.json();
-      setPreventivas(data);
+      setPreventivas((prev: Preventiva[]) => {
+        const existingIds = new Set(prev.map((i: Preventiva) => i.id));
+        const uniqueNew = data.filter((m: Preventiva) => !existingIds.has(m.id));
+        return [...prev, ...uniqueNew];
+      });
     } catch (error) {
       console.error('Erro ao buscar preventivas:', error);
     }
@@ -679,7 +683,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     const userLower = user.toLowerCase();
     return isMaster 
       ? chamados 
-      : chamados.filter(c => 
+      : chamados.filter((c: Chamado) => 
           c.createdBy.toLowerCase() === userLower || 
           (currentUserInfo?.condominio && c.condominio.toLowerCase() === currentUserInfo.condominio.toLowerCase())
         );
@@ -704,7 +708,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
   }, [baseChamados, statusFilter, searchQuery]);
 
   const historyChamados = React.useMemo(() => {
-    return baseChamados.filter(c => {
+    return baseChamados.filter((c: Chamado) => {
       const date = new Date(c.createdAt);
       const matchesMonth = historyMonth === 'all' || date.getMonth() === historyMonth;
       const matchesYear = date.getFullYear() === historyYear;
@@ -715,15 +719,15 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
 
   const stats = React.useMemo(() => {
     const total = baseChamados.length;
-    const pendentes = baseChamados.filter(c => c.status === 'Pendente').length;
-    const emAndamento = baseChamados.filter(c => c.status === 'Em Andamento').length;
-    const concluidos = baseChamados.filter(c => c.status === 'Concluído').length;
-    const altaPrioridade = baseChamados.filter(c => c.prioridade === 'Alta' && c.status !== 'Concluído').length;
-    const hoje = baseChamados.filter(c => new Date(c.createdAt).toDateString() === new Date().toDateString()).length;
+    const pendentes = baseChamados.filter((c: Chamado) => c.status === 'Pendente').length;
+    const emAndamento = baseChamados.filter((c: Chamado) => c.status === 'Em Andamento').length;
+    const concluidos = baseChamados.filter((c: Chamado) => c.status === 'Concluído').length;
+    const altaPrioridade = baseChamados.filter((c: Chamado) => c.prioridade === 'Alta' && c.status !== 'Concluído').length;
+    const hoje = baseChamados.filter((c: Chamado) => new Date(c.createdAt).toDateString() === new Date().toDateString()).length;
     
     // Group by condominium
     const byCondo: Record<string, number> = {};
-    baseChamados.forEach(c => {
+    baseChamados.forEach((c: Chamado) => {
       byCondo[c.condominio] = (byCondo[c.condominio] || 0) + 1;
     });
 
@@ -974,7 +978,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
         return;
       }
       const headers = ['Data', 'Condominio', 'Bloco', 'Apto', 'Tipo', 'Status', 'Descricao', 'Resolucao', 'Tem Foto Problema', 'Tem Foto Resolucao'];
-      const rows = historyChamados.map(c => [
+      const rows = historyChamados.map((c: Chamado) => [
         new Date(c.createdAt).toLocaleDateString('pt-BR'),
         c.condominio,
         c.bloco,
@@ -989,7 +993,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
 
       const csvContent = [
         headers.join(','),
-        ...rows.map(r => r.join(','))
+        ...rows.map((r: any[]) => r.join(','))
       ].join('\n');
 
       const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -1031,7 +1035,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
       }
 
       const tableColumn = ["Data", "Condomínio", "Local", "Tipo", "Prioridade", "Status", "Resolução"];
-      const tableRows = historyChamados.map(c => [
+      const tableRows = historyChamados.map((c: Chamado) => [
         new Date(c.createdAt).toLocaleDateString('pt-BR'),
         c.condominio,
         `Bl ${c.bloco} - Apt ${c.apto}`,
@@ -1051,7 +1055,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
       });
 
       // Add images if they exist
-      const chamadosWithImages = historyChamados.filter(c => c.imageUrl || c.resolutionImageUrl);
+      const chamadosWithImages = historyChamados.filter((c: Chamado) => c.imageUrl || c.resolutionImageUrl);
       if (chamadosWithImages.length > 0) {
         doc.addPage();
         doc.setFontSize(16);
@@ -1059,7 +1063,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
         doc.text('Anexo: Fotos dos Chamados', 14, 22);
         
         let yPos = 35;
-        chamadosWithImages.forEach((c, index) => {
+        chamadosWithImages.forEach((c: Chamado, index: number) => {
           if (yPos > 240) {
             doc.addPage();
             yPos = 22;
@@ -1668,15 +1672,15 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {filteredChamados.map((chamado) => (
+                    {filteredChamados.map((chamado: Chamado) => (
                       <ChamadoCard
                         key={chamado.id}
                         chamado={chamado}
-                        onEdit={async () => {
-                          setEditingChamado(chamado);
+                        onEdit={() => {
+                          setEditingId(chamado.id);
                           setView('edit');
                         }}
-                        onDelete={async () => {
+                        onDelete={() => {
                           if (confirm('Tem certeza que deseja excluir este chamado?')) {
                             handleDelete(chamado.id);
                           }
@@ -2651,7 +2655,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                           <button
                             type="button"
                             onClick={() => {
-                              const c = chamados.find(ch => ch.id === editingId);
+                              const c = chamados.find((ch: Chamado) => ch.id === editingId);
                               if (c) exportOSPDF(c);
                             }}
                             className="flex-1 rounded-lg border border-blue-200 bg-blue-50 py-4 text-base font-bold text-blue-600 hover:bg-blue-100 transition-all flex items-center justify-center gap-2"
@@ -2997,7 +3001,17 @@ function ProblemOption({ id, icon, label, selected, onClick, disabled }: { id: s
   );
 }
 
-function ChamadoCard({ chamado, onEdit, onDelete, onImageClick, onExportOS, showCondo, isMaster }: { chamado: Chamado, onEdit: () => void, onDelete: () => void, onImageClick: (type: 'problem' | 'resolution') => void, onExportOS: () => void, showCondo?: boolean, isMaster?: boolean }) {
+interface ChamadoCardProps {
+  chamado: Chamado;
+  onEdit: () => void;
+  onDelete: () => void;
+  onImageClick: (type: 'problem' | 'resolution') => void;
+  onExportOS: () => void;
+  showCondo?: boolean;
+  isMaster?: boolean;
+}
+
+function ChamadoCard({ chamado, onEdit, onDelete, onImageClick, onExportOS, showCondo, isMaster }: ChamadoCardProps) {
   const statusColors = {
     'Pendente': 'bg-amber-100 text-amber-700 border-amber-200',
     'Em Andamento': 'bg-blue-100 text-blue-700 border-blue-200',

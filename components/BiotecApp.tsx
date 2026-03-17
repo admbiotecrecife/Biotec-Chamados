@@ -1685,8 +1685,8 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                             handleDelete(chamado.id);
                           }
                         }}
-                        onImageClick={async (type) => {
-                          setSelectedImage({ url: type === 'problem' ? chamado.imageUrl : chamado.resolutionImageUrl, type });
+                        onImageClick={(type: 'problem' | 'resolution') => {
+                          handleViewImage(chamado.id, type);
                         }}
                         onExportOS={() => exportOSPDF(chamado)}
                         showCondo={isMaster}

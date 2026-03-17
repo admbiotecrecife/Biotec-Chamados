@@ -305,7 +305,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
 
   const loadMore = () => {
     if (!loading && hasMore) {
-      setPage(prev => prev + 1);
+      setPage((prev: number) => prev + 1);
     }
   };
 
@@ -456,8 +456,8 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
   };
 
   const togglePrevItem = (item: string) => {
-    setPrevItens(prev => 
-      prev.includes(item) ? prev.filter(i => i !== item) : [...prev, item]
+    setPrevItens((prev: string[]) => 
+      prev.includes(item) ? prev.filter((i: string) => i !== item) : [...prev, item]
     );
   };
 
@@ -669,6 +669,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     try {
       const res = await fetch(`/api/users/${login}`, { method: 'DELETE' });
       if (res.ok) {
+        setUsers((prev: User[]) => prev.filter((u: User) => u.login !== login));
         fetchUsers();
       } else {
         const error = await res.json();
@@ -1055,7 +1056,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
       });
 
       // Add images if they exist
-      const chamadosWithImages = historyChamados.filter((c: Chamado) => c.imageUrl || c.resolutionImageUrl);
+      const chamadosWithImages = historyChamados.filter((c: Chamado) => c.imageUrl || c.has_image);
       if (chamadosWithImages.length > 0) {
         doc.addPage();
         doc.setFontSize(16);
@@ -1219,7 +1220,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
             <div className="flex items-center gap-3 px-2">
               <div className="relative h-10 w-10 overflow-hidden rounded-full bg-slate-200 border-2 border-[#00a859]">
                 <Image 
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuBoOZ4EKNq6ArvKItkJw0T9JwxlVE3scy_T9fj4jEiw_FEZ5cMUzgJdYRUO0tP1h6Rz-pe1545z-sfzz2o6on15u0_tnJj7FG-XTbaDm2z2U64LpUIvp268XQr_diY_apMVtXAWuFAMbPtghKN5UmlqHeX_jrB4KG25p181qYgRjzvMmsTuVlwMLpydNjmiyKf_4LSPNmro1IDdud2SCNsKUXgO-oysRtOxRuAMYVVveN9oKHtpJezSDulc8JzELitWRMZ-4Gcybv0"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuBoOZ4EKNq6ArvKItkJw0T9JwxlVE3scy_T9fj4jEiw_FEZ5cMUzgJdYRUO0tP1h6Rz-pe1545z-sfzz2o6on15u0_tnJj7FG-XTbaDm2z2U64LpUIvp268XQr_diY_apMVtXAWuFAMbPtghKN5UmlqHeX_jrB4KG25p181qYgRjzvMmsTuLlwMLpydNjmiyKf_4LSPNmro1IDdud2SCNsKUXgO-oysRtOxRuAMYVVveN9oKHtpJezSDulc8JzELitWRMZ-4Gcybv0"
                   alt={user}
                   fill
                   className="object-cover"
@@ -1312,7 +1313,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                     </button>
                   </div>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    {equipes.map((equipe) => (
+                    {equipes.map((equipe: Equipe) => (
                       <div key={equipe.id} className="flex flex-col gap-4 rounded-xl border border-slate-100 bg-slate-50 p-4">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
@@ -1537,7 +1538,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                           <BarChart
                             data={Object.entries(stats.byCondo)
                               .map(([name, value]) => ({ name, value }))
-                              .sort((a, b) => b.value - a.value)
+                              .sort((a: any, b: any) => (b.value as number) - (a.value as number))
                               .slice(0, 5)}
                             layout="vertical"
                             margin={{ left: 40, right: 20 }}
@@ -2017,7 +2018,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-                    {equipes.map((equipe) => (
+                    {equipes.map((equipe: Equipe) => (
                       <div key={equipe.id} className="group relative rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:shadow-md">
                         <button 
                           onClick={() => handleDeleteEquipe(equipe.id)}

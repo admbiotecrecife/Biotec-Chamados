@@ -1677,10 +1677,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                       <ChamadoCard
                         key={chamado.id}
                         chamado={chamado}
-                        onEdit={() => {
-                          setEditingId(chamado.id);
-                          setView('edit');
-                        }}
+                        onEdit={() => handleEdit(chamado)}
                         onDelete={() => {
                           if (confirm('Tem certeza que deseja excluir este chamado?')) {
                             handleDelete(chamado.id);

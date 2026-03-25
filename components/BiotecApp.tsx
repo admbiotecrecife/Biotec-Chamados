@@ -505,8 +505,8 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
           const data = await res.json();
           fullChamado = {
             ...c,
-            imageUrl: data.image_url || data.imageUrl,
-            resolutionImageUrl: data.resolution_image_url || data.resolutionImageUrl
+            imageUrl: data.image_url || data.imageUrl || '',
+            resolutionImageUrl: data.resolution_image_url || data.resolutionImageUrl || ''
           };
         }
       } catch (error) {
@@ -584,9 +584,9 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
       const imgWidth = 85;
       const imgHeight = 65;
 
-      if (fullChamado.imageUrl) {
+      if (fullChamado.imageUrl && fullChamado.imageUrl.startsWith('data:image/')) {
         try {
-          doc.addImage(fullChamado.imageUrl, 'JPEG', 15, finalY, imgWidth, imgHeight);
+          doc.addImage(fullChamado.imageUrl, 'AUTO', 15, finalY, imgWidth, imgHeight);
           doc.setFontSize(8);
           doc.text('Foto do Problema', 15, finalY + imgHeight + 5);
         } catch (e) {
@@ -594,9 +594,9 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
         }
       }
 
-      if (fullChamado.resolutionImageUrl) {
+      if (fullChamado.resolutionImageUrl && fullChamado.resolutionImageUrl.startsWith('data:image/')) {
         try {
-          doc.addImage(fullChamado.resolutionImageUrl, 'JPEG', 110, finalY, imgWidth, imgHeight);
+          doc.addImage(fullChamado.resolutionImageUrl, 'AUTO', 110, finalY, imgWidth, imgHeight);
           doc.setFontSize(8);
           doc.text('Foto da Resolução', 110, finalY + imgHeight + 5);
         } catch (e) {
@@ -1147,25 +1147,30 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
       const chamadosWithImages = historyChamados.filter((c: Chamado) => c.imageUrl || c.has_image || c.resolutionImageUrl || c.has_resolution_image);
       
       if (chamadosWithImages.length > 0) {
-        // Carregar imagens faltantes
-        const fullChamados = await Promise.all(chamadosWithImages.map(async (c: Chamado) => {
+        // Carregar imagens sequencialmente ou em pequenos lotes para evitar timeouts/throttling
+        const fullChamados = [];
+        for (const c of chamadosWithImages) {
           if ((!c.imageUrl && c.has_image) || (!c.resolutionImageUrl && c.has_resolution_image)) {
             try {
               const res = await fetch(`/api/chamados/${c.id}`);
               if (res.ok) {
                 const data = await res.json();
-                return {
+                fullChamados.push({
                   ...c,
-                  imageUrl: data.image_url || data.imageUrl,
-                  resolutionImageUrl: data.resolution_image_url || data.resolutionImageUrl
-                };
+                  imageUrl: data.image_url || data.imageUrl || '',
+                  resolutionImageUrl: data.resolution_image_url || data.resolutionImageUrl || ''
+                });
+              } else {
+                fullChamados.push(c);
               }
             } catch (e) {
               console.error(`Erro ao carregar imagens do chamado ${c.id}:`, e);
+              fullChamados.push(c);
             }
+          } else {
+            fullChamados.push(c);
           }
-          return c;
-        }));
+        }
 
         doc.addPage();
         doc.setFontSize(16);
@@ -1192,18 +1197,18 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
           const imgWidth = 80;
           const imgHeight = 60;
 
-          if (c.imageUrl) {
+          if (c.imageUrl && c.imageUrl.startsWith('data:image/')) {
             try {
-              doc.addImage(c.imageUrl, 'JPEG', 14, yPos, imgWidth, imgHeight);
+              doc.addImage(c.imageUrl, 'AUTO', 14, yPos, imgWidth, imgHeight);
               doc.text('Foto do Problema', 14, yPos + imgHeight + 5);
             } catch (e) {
               console.error('Erro ao adicionar imagem do problema ao PDF', e);
             }
           }
 
-          if (c.resolutionImageUrl) {
+          if (c.resolutionImageUrl && c.resolutionImageUrl.startsWith('data:image/')) {
             try {
-              doc.addImage(c.resolutionImageUrl, 'JPEG', 100, yPos, imgWidth, imgHeight);
+              doc.addImage(c.resolutionImageUrl, 'AUTO', 100, yPos, imgWidth, imgHeight);
               doc.text('Foto da Resolução', 100, yPos + imgHeight + 5);
             } catch (e) {
               console.error('Erro ao adicionar imagem da resolução ao PDF', e);
@@ -3111,6 +3116,7 @@ function ProblemOption({ id, icon, label, selected, onClick, disabled }: { id: s
 }
 
 interface ChamadoCardProps {
+  key?: string | number;
   chamado: Chamado;
   onEdit: () => void | Promise<void>;
   onDelete: () => void;

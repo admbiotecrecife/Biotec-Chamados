@@ -166,6 +166,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
   const [selectedImage, setSelectedImage] = React.useState<string | null>(null); // For modal view
   const [lastTicketId, setLastTicketId] = React.useState<string | null>(null);
   const [newTicketToast, setNewTicketToast] = React.useState<{ id: string, condo: string } | null>(null);
+  const [customCreatedAt, setCustomCreatedAt] = React.useState<string>('');
   
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isChangingPass, setIsChangingPass] = React.useState(false);
@@ -579,8 +580,8 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     }
   };
 
+  // 1. Initial State: Load persisted view (Only on Mount)
   React.useEffect(() => {
-    // Load persisted view
     const savedView = localStorage.getItem(`biotec_view_${user}`);
     if (savedView) {
       setView(savedView as View);
@@ -588,23 +589,24 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
       setView(isMaster ? 'dashboard' : 'list');
     }
     setIsInitialized(true);
-
-    fetchChamados(false, true);
-    if (isMaster) {
-      fetchEquipes();
-      fetchPreventivas();
-    }
     
     // Request notification permission
     if (isMaster && 'Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
     }
+  }, []); // Run once on mount
 
-    // Polling for new tickets every 30 seconds
-    const pollInterval = setInterval(() => {
-      fetchChamados(true);
-    }, 30000);
+  // 2. Initial Data Fetch (Only on Mount)
+  React.useEffect(() => {
+    fetchChamados(false, true);
+    if (isMaster) {
+      fetchEquipes();
+      fetchPreventivas();
+    }
+  }, [isMaster, fetchChamados, fetchEquipes, fetchPreventivas]);
 
+  // 3. User Info Initialization
+  React.useEffect(() => {
     const init = async () => {
       try {
         const res = await fetch('/api/users');
@@ -615,8 +617,9 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
           const info = allUsers.find((u: User) => u.login.toLowerCase() === user.toLowerCase());
           if (info) {
             setCurrentUserInfo(info);
+            // This only runs when currentUserInfo is first set and if there's no condominio set yet
             if (!isMaster) {
-              setCondominio(info.condominio || '');
+              setCondominio((prev: string) => prev || info.condominio || '');
             }
           }
           if (isMaster) setUsers(allUsers);
@@ -626,9 +629,16 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
       }
     };
     init();
+  }, [user, isMaster]);
+
+  // 4. Polling for new tickets
+  React.useEffect(() => {
+    const pollInterval = setInterval(() => {
+      fetchChamados(true);
+    }, 30000);
 
     return () => clearInterval(pollInterval);
-  }, [isMaster, user, fetchChamados, fetchEquipes, fetchPreventivas]);
+  }, [fetchChamados]);
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -751,10 +761,16 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     setResolutionImageUrl('');
     setFeedbackRating(0);
     setFeedbackComment('');
+    setCustomCreatedAt('');
   };
 
   const handleCreate = () => {
     resetForm();
+    // Initialize with current local time for datetime-local input
+    const now = new Date();
+    const tzOffset = now.getTimezoneOffset() * 60000;
+    const localISOTime = new Date(now.getTime() - tzOffset).toISOString().slice(0, 16);
+    setCustomCreatedAt(localISOTime);
     setView('create');
   };
 
@@ -778,6 +794,14 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
       setResolutionImageUrl(fullChamado.resolution_image_url || fullChamado.resolutionImageUrl || '');
       setFeedbackRating(fullChamado.feedback_rating || fullChamado.feedbackRating || 0);
       setFeedbackComment(fullChamado.feedback_comment || fullChamado.feedbackComment || '');
+      const dateToUse = fullChamado.created_at || fullChamado.createdAt;
+      if (dateToUse) {
+        const d = new Date(dateToUse);
+        const tzOffset = d.getTimezoneOffset() * 60000;
+        const localISOTime = new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
+        setCustomCreatedAt(localISOTime);
+      }
+      
       setView('edit');
     } catch (error) {
       console.error('Erro ao editar:', error);
@@ -901,7 +925,8 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
       imageUrl,
       resolutionImageUrl,
       feedbackRating,
-      feedbackComment
+      feedbackComment,
+      createdAt: customCreatedAt
     };
     
     // Só envia createdBy na criação para não sobrescrever o dono original no edit
@@ -2342,6 +2367,22 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
                               required
                             />
                           )}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-2">
+                        <label className="text-xs font-semibold uppercase tracking-wider text-slate-500" htmlFor="createdAt">Data de Abertura</label>
+                        <div className="relative">
+                          <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                          <input 
+                            type="datetime-local"
+                            className={`w-full rounded-lg border-slate-200 py-3 pl-10 text-slate-900 focus:border-[#00a859] focus:ring-[#00a859] ${isLocked ? 'bg-slate-100 cursor-not-allowed' : 'bg-slate-50'}`}
+                            id="createdAt"
+                            value={customCreatedAt}
+                            onChange={(e) => setCustomCreatedAt(e.target.value)}
+                            disabled={isLocked}
+                            required
+                          />
                         </div>
                       </div>
 

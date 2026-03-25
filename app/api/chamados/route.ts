@@ -49,6 +49,7 @@ export async function POST(request: Request) {
         status: 'Pendente',
         prioridade: data.prioridade || 'Média',
         created_by: data.createdBy || 'Sistema',
+        created_at: data.createdAt || new Date().toISOString(),
         image_url: data.imageUrl || null,
         resolution_image_url: data.resolutionImageUrl || null
       }])

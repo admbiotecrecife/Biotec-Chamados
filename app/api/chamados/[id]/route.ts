@@ -36,6 +36,7 @@ export async function PUT(
     const updateData: any = {};
     if (data.status) updateData.status = data.status;
     if (data.prioridade) updateData.prioridade = data.prioridade;
+    if (data.createdAt) updateData.created_at = data.createdAt;
     if (data.resolucao !== undefined) updateData.resolucao = data.resolucao;
     if (data.descricao) updateData.descricao = data.descricao;
     if (data.bloco) updateData.bloco = data.bloco;

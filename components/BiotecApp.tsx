@@ -494,7 +494,26 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     doc.save(`Preventiva_${p.condominio}_${new Date(p.data_visita).toLocaleDateString('pt-BR')}.pdf`);
   };
 
-  const exportOSPDF = (c: Chamado) => {
+  const exportOSPDF = async (c: Chamado) => {
+    let fullChamado = c;
+    
+    // Se não tiver as URLs das imagens mas os flags indicarem que existem, busca os dados completos
+    if ((!c.imageUrl && c.has_image) || (!c.resolutionImageUrl && c.has_resolution_image)) {
+      try {
+        const res = await fetch(`/api/chamados/${c.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          fullChamado = {
+            ...c,
+            imageUrl: data.image_url || data.imageUrl,
+            resolutionImageUrl: data.resolution_image_url || data.resolutionImageUrl
+          };
+        }
+      } catch (error) {
+        console.error('Erro ao buscar dados completos para OS:', error);
+      }
+    }
+
     const doc = new jsPDF();
     
     // Header
@@ -518,10 +537,10 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     doc.setFont('helvetica', 'bold');
     doc.text('DADOS DO CHAMADO', 16, 50);
     doc.setFont('helvetica', 'normal');
-    doc.text(`ID: ${c.id}`, 16, 58);
-    doc.text(`Data de Abertura: ${new Date(c.createdAt).toLocaleString('pt-BR')}`, 16, 64);
-    doc.text(`Condomínio: ${c.condominio}`, 16, 70);
-    doc.text(`Local: Bloco ${c.bloco} - Apto ${c.apto}`, 16, 76);
+    doc.text(`ID: ${fullChamado.id}`, 16, 58);
+    doc.text(`Data de Abertura: ${new Date(fullChamado.createdAt).toLocaleString('pt-BR')}`, 16, 64);
+    doc.text(`Condomínio: ${fullChamado.condominio}`, 16, 70);
+    doc.text(`Local: Bloco ${fullChamado.bloco} - Apto ${fullChamado.apto}`, 16, 76);
     
     // Service Details
     doc.setFont('helvetica', 'bold');
@@ -532,10 +551,10 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
       startY: 95,
       head: [['Campo', 'Descrição']],
       body: [
-        ['Tipo de Problema', c.problemType === 'interfone' ? 'Interfone' : c.problemType === 'tv' ? 'Sinal de TV' : 'Outro'],
-        ['Prioridade', c.prioridade || 'Média'],
-        ['Status Atual', c.status],
-        ['Descrição', c.descricao],
+        ['Tipo de Problema', fullChamado.problemType === 'interfone' ? 'Interfone' : fullChamado.problemType === 'tv' ? 'Sinal de TV' : 'Outro'],
+        ['Prioridade', fullChamado.prioridade || 'Média'],
+        ['Status Atual', fullChamado.status],
+        ['Descrição', fullChamado.descricao],
       ],
       theme: 'grid',
       headStyles: { fillColor: [0, 168, 89] },
@@ -545,17 +564,59 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
       }
     });
     
-    const finalY = (doc as any).lastAutoTable.finalY || 130;
+    let finalY = (doc as any).lastAutoTable.finalY || 130;
     
     // Resolution Section
     doc.setFont('helvetica', 'bold');
     doc.text('RESOLUÇÃO / LAUDO TÉCNICO', 16, finalY + 15);
     doc.setFont('helvetica', 'normal');
     doc.rect(14, finalY + 18, 182, 40);
-    doc.text(c.resolucao || 'Serviço em andamento ou aguardando descrição técnica.', 18, finalY + 25, { maxWidth: 175 });
+    doc.text(fullChamado.resolucao || 'Serviço em andamento ou aguardando descrição técnica.', 18, finalY + 25, { maxWidth: 175 });
     
+    finalY += 65;
+
+    // Photos Section
+    if (fullChamado.imageUrl || fullChamado.resolutionImageUrl) {
+      doc.setFont('helvetica', 'bold');
+      doc.text('EVIDÊNCIAS FOTOGRÁFICAS', 16, finalY);
+      finalY += 5;
+
+      const imgWidth = 85;
+      const imgHeight = 65;
+
+      if (fullChamado.imageUrl) {
+        try {
+          doc.addImage(fullChamado.imageUrl, 'JPEG', 15, finalY, imgWidth, imgHeight);
+          doc.setFontSize(8);
+          doc.text('Foto do Problema', 15, finalY + imgHeight + 5);
+        } catch (e) {
+          console.error('Erro ao adicionar foto do problema ao PDF:', e);
+        }
+      }
+
+      if (fullChamado.resolutionImageUrl) {
+        try {
+          doc.addImage(fullChamado.resolutionImageUrl, 'JPEG', 110, finalY, imgWidth, imgHeight);
+          doc.setFontSize(8);
+          doc.text('Foto da Resolução', 110, finalY + imgHeight + 5);
+        } catch (e) {
+          console.error('Erro ao adicionar foto da resolução ao PDF:', e);
+        }
+      }
+      
+      finalY += imgHeight + 15;
+    }
+
     // Signatures
-    const sigY = finalY + 75;
+    // Ensure signatures don't overlap with photos or bottom of page
+    if (finalY > 240) {
+      doc.addPage();
+      finalY = 40;
+    } else {
+      finalY += 20;
+    }
+
+    const sigY = finalY;
     doc.line(20, sigY, 90, sigY);
     doc.text('Assinatura do Técnico', 55, sigY + 5, { align: 'center' });
     
@@ -566,7 +627,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     doc.setTextColor(150);
     doc.text(`Documento gerado em ${new Date().toLocaleString('pt-BR')} via Sistema Biotec`, 105, 285, { align: 'center' });
     
-    doc.save(`OS_${c.condominio}_${c.id.substring(0, 8)}.pdf`);
+    doc.save(`OS_${fullChamado.condominio}_${fullChamado.id.substring(0, 8)}.pdf`);
   };
 
   const fetchUsers = async () => {
@@ -1013,8 +1074,8 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
         c.status,
         c.descricao.replace(/\n/g, ' ').replace(/,/g, ';'),
         (c.resolucao || '').replace(/\n/g, ' ').replace(/,/g, ';'),
-        c.imageUrl ? 'Sim' : 'Não',
-        c.resolutionImageUrl ? 'Sim' : 'Não'
+        (c.imageUrl || c.has_image) ? 'Sim' : 'Não',
+        (c.resolutionImageUrl || c.has_resolution_image) ? 'Sim' : 'Não'
       ]);
 
       const csvContent = [
@@ -1038,12 +1099,14 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     }
   };
 
-  const exportPDF = () => {
+  const exportPDF = async () => {
     try {
       if (historyChamados.length === 0) {
         alert('Não há chamados no período selecionado para exportar.');
         return;
       }
+
+      setLoading(true);
       const doc = new jsPDF();
       
       // Header
@@ -1081,16 +1144,37 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
       });
 
       // Add images if they exist
-      const chamadosWithImages = historyChamados.filter((c: Chamado) => c.imageUrl || c.has_image);
+      const chamadosWithImages = historyChamados.filter((c: Chamado) => c.imageUrl || c.has_image || c.resolutionImageUrl || c.has_resolution_image);
+      
       if (chamadosWithImages.length > 0) {
+        // Carregar imagens faltantes
+        const fullChamados = await Promise.all(chamadosWithImages.map(async (c: Chamado) => {
+          if ((!c.imageUrl && c.has_image) || (!c.resolutionImageUrl && c.has_resolution_image)) {
+            try {
+              const res = await fetch(`/api/chamados/${c.id}`);
+              if (res.ok) {
+                const data = await res.json();
+                return {
+                  ...c,
+                  imageUrl: data.image_url || data.imageUrl,
+                  resolutionImageUrl: data.resolution_image_url || data.resolutionImageUrl
+                };
+              }
+            } catch (e) {
+              console.error(`Erro ao carregar imagens do chamado ${c.id}:`, e);
+            }
+          }
+          return c;
+        }));
+
         doc.addPage();
         doc.setFontSize(16);
         doc.setTextColor(0, 168, 89);
         doc.text('Anexo: Fotos dos Chamados', 14, 22);
         
         let yPos = 35;
-        chamadosWithImages.forEach((c: Chamado, index: number) => {
-          if (yPos > 240) {
+        fullChamados.forEach((c: Chamado) => {
+          if (yPos > 210) {
             doc.addPage();
             yPos = 22;
           }
@@ -1108,37 +1192,21 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
           const imgWidth = 80;
           const imgHeight = 60;
 
-          if (c.imageUrl || c.has_image) {
-            if (c.imageUrl) {
-              try {
-                doc.addImage(c.imageUrl, 'JPEG', 14, yPos, imgWidth, imgHeight);
-                doc.text('Foto do Problema', 14, yPos + imgHeight + 5);
-              } catch (e) {
-                console.error('Erro ao adicionar imagem do problema ao PDF', e);
-              }
-            } else {
-              doc.setFontSize(8);
-              doc.setTextColor(150);
-              doc.text('[Imagem disponível no sistema - abra o chamado para visualizar]', 14, yPos + 10);
-              doc.setFontSize(10);
-              doc.setTextColor(50);
+          if (c.imageUrl) {
+            try {
+              doc.addImage(c.imageUrl, 'JPEG', 14, yPos, imgWidth, imgHeight);
+              doc.text('Foto do Problema', 14, yPos + imgHeight + 5);
+            } catch (e) {
+              console.error('Erro ao adicionar imagem do problema ao PDF', e);
             }
           }
 
-          if (c.resolutionImageUrl || c.has_resolution_image) {
-            if (c.resolutionImageUrl) {
-              try {
-                doc.addImage(c.resolutionImageUrl, 'JPEG', 100, yPos, imgWidth, imgHeight);
-                doc.text('Foto da Resolução', 100, yPos + imgHeight + 5);
-              } catch (e) {
-                console.error('Erro ao adicionar imagem da resolução ao PDF', e);
-              }
-            } else {
-              doc.setFontSize(8);
-              doc.setTextColor(150);
-              doc.text('[Imagem disponível no sistema - abra o chamado para visualizar]', 100, yPos + 10);
-              doc.setFontSize(10);
-              doc.setTextColor(50);
+          if (c.resolutionImageUrl) {
+            try {
+              doc.addImage(c.resolutionImageUrl, 'JPEG', 100, yPos, imgWidth, imgHeight);
+              doc.text('Foto da Resolução', 100, yPos + imgHeight + 5);
+            } catch (e) {
+              console.error('Erro ao adicionar imagem da resolução ao PDF', e);
             }
           }
 
@@ -1148,9 +1216,11 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
 
       const monthLabel = historyMonth === 'all' ? 'todos' : historyMonth + 1;
       doc.save(`relatorio_biotec_${monthLabel}_${historyYear}.pdf`);
+      setLoading(false);
     } catch (error: any) {
       console.error('Erro ao exportar PDF:', error);
       alert('Erro ao gerar PDF: ' + error.message);
+      setLoading(false);
     }
   };
 
@@ -3042,10 +3112,10 @@ function ProblemOption({ id, icon, label, selected, onClick, disabled }: { id: s
 
 interface ChamadoCardProps {
   chamado: Chamado;
-  onEdit: () => void;
+  onEdit: () => void | Promise<void>;
   onDelete: () => void;
   onImageClick: (type: 'problem' | 'resolution') => void;
-  onExportOS: () => void;
+  onExportOS: () => void | Promise<void>;
   showCondo?: boolean;
   isMaster?: boolean;
 }

@@ -225,20 +225,18 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     localStorage.setItem(`biotec_view_${user}`, newView);
   };
 
-  const fetchChamados = React.useCallback(async (isSilent = false, reset = false) => {
+  const fetchChamados = React.useCallback(async (isSilent = false, reset = false, pollLatest = false) => {
     if (!isSilent) setLoading(true);
     try {
-      const currentPage = reset ? 0 : page;
+      const currentPage = (reset || pollLatest) ? 0 : page;
       const res = await fetch(`/api/chamados?limit=${PAGE_SIZE}&offset=${currentPage * PAGE_SIZE}`);
       
-      // Check if response is JSON before parsing
       const contentType = res.headers.get('content-type');
       if (!res.ok) {
         if (contentType && contentType.includes('application/json')) {
           const errorData = await res.json();
           throw new Error(errorData.error || `Erro ${res.status}: Falha ao buscar chamados`);
         } else {
-          // If not JSON, it might be a 502 HTML page from Supabase/Cloudflare
           const text = await res.text();
           if (text.includes('Bad gateway') || text.includes('502')) {
             throw new Error('O servidor do banco de dados (Supabase) está temporariamente indisponível (Erro 502). Por favor, verifique se o projeto não está pausado ou tente novamente em alguns minutos.');
@@ -265,13 +263,11 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
         status: c.status || 'Pendente'
       }));
       
-      // Notification Logic for Master (only on first page)
       if (currentPage === 0 && isMaster && lastTicketId && mappedData.length > 0) {
         const latest = mappedData[0];
         if (latest.id !== lastTicketId && latest.createdBy.toLowerCase() !== user.toLowerCase()) {
           setNewTicketToast({ id: latest.id, condo: latest.condominio });
           
-          // Browser Notification
           if (Notification.permission === 'granted') {
             new Notification('Novo Chamado Biotec', {
               body: `Condomínio: ${latest.condominio}\nProblema: ${latest.descricao.substring(0, 50)}...`,
@@ -292,7 +288,9 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
         setChamados((prev: Chamado[]) => {
           const existingIds = new Set(prev.map((p: Chamado) => p.id));
           const uniqueNew = mappedData.filter((m: Chamado) => !existingIds.has(m.id));
-          return [...prev, ...uniqueNew];
+          const combined = [...prev, ...uniqueNew];
+          // Ordenar por data descendente para garantir que pollings apareçam no topo
+          return combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         });
       }
       
@@ -315,6 +313,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
     if (page > 0) {
       fetchChamados(false, false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
   const fetchEquipes = React.useCallback(async () => {
@@ -664,7 +663,8 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
       fetchEquipes();
       fetchPreventivas();
     }
-  }, [isMaster, fetchChamados, fetchEquipes, fetchPreventivas]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMaster]);
 
   // 3. User Info Initialization
   React.useEffect(() => {
@@ -695,7 +695,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
   // 4. Polling for new tickets
   React.useEffect(() => {
     const pollInterval = setInterval(() => {
-      fetchChamados(true);
+      fetchChamados(true, false, true); // isSilent=true, reset=false, pollLatest=true
     }, 30000);
 
     return () => clearInterval(pollInterval);

@@ -10,18 +10,33 @@ export async function GET(request: Request) {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from('chamados')
-      .select('id, created_at, created_by, condominio, bloco, apto, problem_type, descricao, resolucao, status, prioridade, feedback_rating, feedback_comment, image_url, resolution_image_url')
+      .select('id, created_at, created_by, condominio, bloco, apto, problem_type, descricao, resolucao, status, prioridade, feedback_rating, feedback_comment')
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
     if (error) throw error;
     
-    // As imagens base64 não são enviadas na listagem para salvar banda e evitar Timeouts Vercel/Supabase.
+    // As imagens base64 não são enviadas na listagem para salvar banda e evitar consumos excessivos de Egress Vercel/Supabase.
+    // Para identificar se a imagem existe sem baixar toda a string do banco (que gera 11GB+ egress), fazemos duas consultas leves:
+    let hasImageSet = new Set();
+    let hasResImageSet = new Set();
+    
+    const ids = (data || []).map(c => c.id);
+    if (ids.length > 0) {
+      const [imgIds, resImgIds] = await Promise.all([
+        supabase.from('chamados').select('id').not('image_url', 'is', null).in('id', ids),
+        supabase.from('chamados').select('id').not('resolution_image_url', 'is', null).in('id', ids)
+      ]);
+      
+      hasImageSet = new Set((imgIds.data || []).map(x => x.id));
+      hasResImageSet = new Set((resImgIds.data || []).map(x => x.id));
+    }
+
     // Retornamos apenas flags booleanas para que a UI saiba onde existem imagens.
     const summaryData = (data || []).map(c => ({
       ...c,
-      has_image: !!c.image_url,
-      has_resolution_image: !!c.resolution_image_url,
+      has_image: hasImageSet.has(c.id),
+      has_resolution_image: hasResImageSet.has(c.id),
       image_url: null,
       resolution_image_url: null
     }));
@@ -53,7 +68,7 @@ export async function POST(request: Request) {
         image_url: data.imageUrl || null,
         resolution_image_url: data.resolutionImageUrl || null
       }])
-      .select()
+      .select('id')
       .single();
 
     if (error) throw error;

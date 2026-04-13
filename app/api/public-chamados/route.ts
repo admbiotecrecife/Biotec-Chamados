@@ -71,7 +71,7 @@ export async function POST(request: Request) {
         created_at: new Date().toISOString(),
         image_url: data.imageUrl || null
       }])
-      .select()
+      .select('id')
       .single();
 
     if (error) throw error;

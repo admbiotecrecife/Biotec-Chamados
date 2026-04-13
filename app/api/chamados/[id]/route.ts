@@ -51,7 +51,7 @@ export async function PUT(
       .from('chamados')
       .update(updateData)
       .eq('id', id)
-      .select()
+      .select('id')
       .single();
 
     if (error) throw error;
@@ -75,7 +75,7 @@ export async function DELETE(
       .from('chamados')
       .delete()
       .eq('id', id)
-      .select()
+      .select('id')
       .single();
 
     if (error) throw error;

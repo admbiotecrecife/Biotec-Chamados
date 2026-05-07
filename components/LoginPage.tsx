@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { motion } from 'motion/react';
-import { Lock, User, ArrowRight, Building2 } from 'lucide-react';
+import { Lock, User, ArrowRight, Building2, Phone } from 'lucide-react';
 import Image from 'next/image';
 
 interface LoginPageProps {
@@ -53,12 +53,26 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
       >
-        <div className="bg-[#00a859] p-8 text-center text-white">
+        <div className="bg-[#00a859] p-8 text-center text-white relative overflow-hidden">
+          {/* Maintenance Overlay if needed, but we'll just add a banner below */}
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
             <span className="text-3xl font-bold">b</span>
           </div>
           <h1 className="text-2xl font-bold">Painel de Chamados</h1>
           <p className="mt-2 text-white/80">Gestão de Manutenção Biotec</p>
+        </div>
+
+        {/* Maintenance Notice */}
+        <div className="bg-amber-50 border-y border-amber-100 p-4">
+          <div className="flex gap-3 items-center">
+            <div className="bg-amber-100 p-2 rounded-full text-amber-600">
+              <Building2 size={18} />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-amber-900 uppercase tracking-tight">Servidor em Manutenção</p>
+              <p className="text-[11px] text-amber-700">O acesso aos dados está temporariamente limitado para otimização.</p>
+            </div>
+          </div>
         </div>
 
         <div className="p-8">
@@ -125,8 +139,20 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             </button>
           </form>
 
-          <div className="mt-8 border-t border-slate-100 pt-6 text-center">
-            <p className="text-sm text-slate-500">
+          <div className="mt-8 border-t border-slate-100 pt-6">
+            <p className="text-center text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">
+              Precisa abrir um chamado?
+            </p>
+            <a 
+              href="https://wa.me/5581988431463?text=Olá,%20gostaria%20de%20abrir%20um%20chamado%20técnico."
+              target="_blank"
+              rel="noreferrer"
+              className="flex w-full items-center justify-center gap-3 rounded-xl bg-emerald-500/10 py-3 text-sm font-bold text-emerald-700 transition-all hover:bg-emerald-500 hover:text-white border border-emerald-200"
+            >
+              <Phone size={18} />
+              Suporte via WhatsApp
+            </a>
+            <p className="mt-6 text-center text-xs text-slate-500">
               Esqueceu sua senha? Entre em contato com o suporte Biotec.
             </p>
           </div>

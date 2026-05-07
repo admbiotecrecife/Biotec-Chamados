@@ -696,7 +696,7 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
   React.useEffect(() => {
     const pollInterval = setInterval(() => {
       fetchChamados(true, false, true); // isSilent=true, reset=false, pollLatest=true
-    }, 30000);
+    }, 120000);
 
     return () => clearInterval(pollInterval);
   }, [fetchChamados]);

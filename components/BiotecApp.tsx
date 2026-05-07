@@ -1380,6 +1380,25 @@ export default function BiotecApp({ user, onLogout }: BiotecAppProps) {
           </div>
         </header>
 
+        {/* Maintenance Banner */}
+        <div className="bg-amber-600 px-4 py-2 text-white shadow-md">
+          <div className="mx-auto max-w-6xl flex flex-col sm:flex-row items-center justify-between gap-2 text-center sm:text-left">
+            <div className="flex items-center gap-2">
+              <AlertCircle size={18} className="animate-pulse" />
+              <span className="text-xs sm:text-sm font-bold">Aviso: Servidor em manutenção. O acesso aos dados está limitado.</span>
+            </div>
+            <a 
+              href="https://wa.me/5581988431463?text=Olá,%20sou%20cliente%20da%20Biotec%20e%20preciso%20de%20ajuda%20com%20um%20chamado."
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-bold text-amber-700 hover:bg-amber-50 transition-colors"
+            >
+              <Phone size={14} />
+              Suporte via WhatsApp
+            </a>
+          </div>
+        </div>
+
         {/* Content Area */}
         <div className="mx-auto w-full max-w-6xl p-6 md:p-10 pb-24 md:pb-10">
           <AnimatePresence mode="wait">

@@ -1,3 +1,4 @@
+// Last migration check: 2026-05-13
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 let supabaseInstance: SupabaseClient | null = null;
@@ -34,9 +35,9 @@ export function getSupabase() {
 export function getSupabaseAdmin() {
   if (!supabaseAdminInstance) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+    const supabaseServiceRole_Key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
 
-    if (!supabaseUrl || !supabaseServiceKey) {
+    if (!supabaseUrl || !supabaseServiceRole_Key) {
       // Fallback to anon client if service key is missing
       try {
         return getSupabase();
@@ -54,7 +55,7 @@ export function getSupabaseAdmin() {
     }
 
     try {
-      supabaseAdminInstance = createClient(supabaseUrl, supabaseServiceKey);
+      supabaseAdminInstance = createClient(supabaseUrl, supabaseServiceRole_Key);
     } catch (err: any) {
       console.error('Failed to initialize Supabase Admin client:', err.message);
       throw new Error(`Erro ao inicializar Supabase Admin: ${err.message}`);

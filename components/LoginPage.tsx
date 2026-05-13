@@ -62,18 +62,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
           <p className="mt-2 text-white/80">Gestão de Manutenção Biotec</p>
         </div>
 
-        {/* Maintenance Notice */}
-        <div className="bg-amber-50 border-y border-amber-100 p-4">
-          <div className="flex gap-3 items-center">
-            <div className="bg-amber-100 p-2 rounded-full text-amber-600">
-              <Building2 size={18} />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-amber-900 uppercase tracking-tight">Servidor em Manutenção</p>
-              <p className="text-[11px] text-amber-700">O acesso aos dados está temporariamente limitado para otimização.</p>
-            </div>
-          </div>
-        </div>
+
 
         <div className="p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
